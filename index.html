@@ -187,6 +187,29 @@ svg.i{fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 #live.dim .lt,#live.dim .lstats,#live.dim .lbtns,#live.dim .zbar,#live.dim .hint{opacity:0;pointer-events:none}
 #live.dim .bpm,#live.dim .zname{filter:brightness(.62)}
 #live .hint{text-align:center;font-size:12px;color:var(--mu2);margin-bottom:10px}
+.tap{cursor:pointer;transition:transform .12s,background .15s}
+.tap:active{transform:scale(.985)}
+.card.tap:hover{background:#161a20}
+.chev{color:var(--mu2);font-size:18px;line-height:1;margin-left:4px}
+.ms.tap{border-radius:12px;margin:-4px;padding:4px}
+.ms.tap:active{background:var(--s2)}
+.scrub{position:relative;touch-action:pan-y}
+.scrub .vline{position:absolute;top:8px;bottom:20px;width:1px;background:rgba(255,255,255,.35);display:none;pointer-events:none}
+.scrub .tip{position:absolute;top:-6px;transform:translateX(-50%);background:var(--s3);border:1px solid var(--line);border-radius:9px;padding:4px 9px;font-size:12px;font-weight:600;white-space:nowrap;display:none;pointer-events:none;z-index:2}
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+.tile{background:var(--s2);border-radius:12px;padding:10px 11px}
+.tile .v{font-size:19px;font-weight:600}
+.tile .v small{font-size:12px;color:var(--mu);font-weight:500;margin-left:2px}
+.tile .l{font-size:11.5px;color:var(--mu);margin-top:1px}
+.zrow{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.zrow .n{width:70px;font-size:13px;font-weight:600}
+.zrow .bar{flex:1}
+.zrow .m{width:78px;text-align:right;font-size:12.5px;color:var(--mu)}
+.dhead{display:flex;gap:12px;align-items:center;margin-bottom:14px}
+.dhead .ic{width:46px;height:46px;border-radius:14px;background:var(--acc-d);display:grid;place-items:center;flex:none}
+.dhead .ic svg{width:23px;height:23px}
+.dhead h2{margin:0 !important}
+.loading{color:var(--mu);font-size:13px;padding:24px 0;text-align:center}
 .liveCard{background:linear-gradient(135deg,rgba(255,77,94,.16),rgba(255,77,94,.03));border:1px solid rgba(255,77,94,.3)}
 </style>
 </head>
@@ -347,13 +370,25 @@ async function syncHealth(manual){
   job('Steps',async()=>{const rows=await dailyRollup('steps',7);const m={};rows.forEach(r=>{const k=civKey(r.civilStartTime);if(k)m[k]=+(r.steps&&r.steps.countSum||0)});h.steps7=[...Array(7)].map((_,i)=>{const k=dkey(addDays(now,i-6));return{date:k,steps:m[k]||0}})}),
   job('Calories',async()=>{const rows=await dailyRollup('active-energy-burned',7);const m={};rows.forEach(r=>{const k=civKey(r.civilStartTime);if(k)m[k]=deepNum(r,/kcal|calor|energy|sum/i)||0});h.activeKcal7=[...Array(7)].map((_,i)=>Math.round(m[dkey(addDays(now,i-6))]||0))}),
   job('Heart rate',async()=>{const since=new Date(sod(now).getTime()-2*3600e3).toISOString();const pts=await listAll('heart-rate',`heart_rate.sample_time.physical_time >= "${since}"`,40000);h.hr=pts.map(p=>({t:Date.parse(p.heartRate.sampleTime.physicalTime),bpm:+p.heartRate.beatsPerMinute})).filter(x=>x.t&&x.bpm).sort((a,b)=>a.t-b.t)}),
-  job('Workouts',async()=>{const pts=await listAll('exercise',`exercise.interval.civil_start_time >= "${d7}"`);h.exercises=pts.map(p=>{const e=p.exercise||{},ms=e.metricsSummary||{};return{id:p.name,remote:p.name,type:e.exerciseType||'WORKOUT',name:e.displayName||'',start:Date.parse(e.interval.startTime),end:Date.parse(e.interval.endTime),kcal:Math.round(ms.caloriesKcal||0),distanceKm:(ms.distanceMillimeters||ms.distanceMillimiters||0)/1e6,source:(p.dataSource&&p.dataSource.recordingMethod==='MANUAL')?'manual-remote':'fitbit'}})}),
+  job('Workouts',async()=>{const pts=await listAll('exercise',`exercise.interval.civil_start_time >= "${dkey(addDays(now,-30))}"`);const got=pts.map(mapExercise);S.exHist=S.exHist||{};got.forEach(e=>S.exHist[e.id]=e);h.exercises=Object.values(S.exHist);if(false)pts.map(p=>{const e=p.exercise||{},ms=e.metricsSummary||{};return{id:p.name,remote:p.name,type:e.exerciseType||'WORKOUT',name:e.displayName||'',start:Date.parse(e.interval.startTime),end:Date.parse(e.interval.endTime),kcal:Math.round(ms.caloriesKcal||0),distanceKm:(ms.distanceMillimeters||ms.distanceMillimiters||0)/1e6,source:(p.dataSource&&p.dataSource.recordingMethod==='MANUAL')?'manual-remote':'fitbit'}})}),
   job('Sleep',async()=>{const pts=await listAll('sleep',`sleep.interval.civil_end_time >= "${dkey(addDays(now,-2))}"`);const last=pts.map(p=>p.sleep).filter(Boolean).sort((a,b)=>Date.parse(b.interval.endTime)-Date.parse(a.interval.endTime))[0];if(last){const sm=last.summary||{},st={};(sm.stagesSummary||[]).forEach(x=>st[String(x.type).toLowerCase()]=+x.minutes);h.sleep={minutes:+(sm.minutesAsleep||0)||Math.round((Date.parse(last.interval.endTime)-Date.parse(last.interval.startTime))/60e3),start:Date.parse(last.interval.startTime),end:Date.parse(last.interval.endTime),deep:st.deep,rem:st.rem,light:st.light,awake:st.awake||+sm.minutesAwake||0}}}),
   job('Resting HR',async()=>{let pts;try{pts=await listAll('daily-resting-heart-rate',`daily_resting_heart_rate.date >= "${d7}"`,50)}catch(e){pts=await listAll('daily-resting-heart-rate','',50)}const v=pts.map(p=>deepNum(p.dailyRestingHeartRate,/beats|bpm/i)).filter(Boolean);if(v.length)h.restingHR=Math.round(v[v.length-1])}),
   job('Weight',async()=>{const since=addDays(now,-120).toISOString();const pts=await listAll('weight',`weight.sample_time.physical_time >= "${since}"`);h.weights=pts.map(p=>({t:Date.parse(p.weight.sampleTime.physicalTime),kg:+((deepNum(p.weight,/gram/i)||0)/1000).toFixed(2),remote:p.name,source:'fitbit'})).filter(x=>x.kg>0)}),
  ]);
  h.fetched=Date.now(); S.health=h; S.lastSync=Date.now(); syncing=false; save(); render();
  toast(syncErrors.length?`Synced with ${syncErrors.length} issue(s) — see Settings`:'Synced with Google Health');
+}
+function mapExercise(p){const e=p.exercise||{},ms=e.metricsSummary||{};return{id:p.name,remote:p.name,type:e.exerciseType||'WORKOUT',name:e.displayName||'',start:Date.parse(e.interval.startTime),end:Date.parse(e.interval.endTime),kcal:Math.round(ms.caloriesKcal||0),distanceKm:(ms.distanceMillimeters||ms.distanceMillimiters||0)/1e6,steps:+(ms.steps||0)||undefined,avgHR:+(ms.averageHeartRateBeatsPerMinute||ms.averageHeartRate||0)||undefined,source:(p.dataSource&&p.dataSource.recordingMethod==='MANUAL')?'manual-remote':'fitbit'}}
+async function loadOlderWorkouts(){
+ if(S.settings.demo){toast('Connect Google Health to load your history');return}
+ if(!(await ensureToken())){toast('Connect Google Health in Settings');return}
+ const all=Object.values(S.exHist||{}); const oldest=all.length?Math.min(...all.map(w=>w.start)):Date.now();
+ const to=dkey(oldest), from=dkey(addDays(oldest,-30));
+ try{ const pts=await listAll('exercise',`exercise.interval.civil_start_time >= "${from}" AND exercise.interval.civil_start_time < "${to}"`);
+  S.exHist=S.exHist||{}; pts.map(mapExercise).forEach(e=>S.exHist[e.id]=e);
+  if(S.health) S.health.exercises=Object.values(S.exHist); S.historyFrom=Math.min(S.historyFrom||Date.now(),+new Date(from+'T00:00'));
+  save(); render(); toast(pts.length?`Loaded ${pts.length} older workout${pts.length===1?'':'s'}`:'No workouts in the 30 days before that');
+ }catch(e){toast('Could not load: '+e.message)}
 }
 async function pushWorkout(w){
  const body={dataSource:{recordingMethod:'MANUAL'},exercise:{interval:{startTime:new Date(w.start).toISOString(),startUtcOffset:utcOff(),endTime:new Date(w.end).toISOString(),endUtcOffset:utcOff()},exerciseType:w.type,displayName:w.name||typeName(w.type),activeDuration:Math.round((w.end-w.start)/1000)+'s',metricsSummary:{caloriesKcal:w.kcal||0,...(w.distanceKm?{distanceMillimeters:w.distanceKm*1e6}:{})}}};
@@ -412,7 +447,8 @@ const foodsOn=k=>S.foods.filter(f=>f.date===k);
 const sumF=(arr,k)=>arr.reduce((a,b)=>a+(+b[k]||0),0);
 
 /* ============ Charts ============ */
-function hrChart(hr,sessions,th,T0,T1,Hh=150){
+let chartSeq=0; window.__charts={};
+function hrChart(hr,sessions,th,T0,T1,Hh=150,scrub){
  const W=520,pl=4,pr=30,pt=10,pb=20; if(!hr.length) return '<div class="empty small">No heart-rate data yet</div>';
  const t0=T0||sod(new Date()).getTime(),t1=T1||Date.now(),tEnd=T1?t1:Math.max(t1,t0+6*3600e3); const pts=hr.filter(x=>x.t>=t0&&x.t<=t1); if(pts.length<2) return '<div class="empty small">No heart-rate data for this period yet</div>';
  const step=Math.max(1,Math.floor(pts.length/300)); const ds=[];for(let i=0;i<pts.length;i+=step){const sl=pts.slice(i,i+step);ds.push({t:sl[0].t,bpm:sl.reduce((a,b)=>a+b.bpm,0)/sl.length})}
@@ -431,13 +467,16 @@ function hrChart(hr,sessions,th,T0,T1,Hh=150){
  if(T1){[t0,t0+(t1-t0)/2,t1].forEach((t,i)=>ticks+=`<text x="${x(t)}" y="${Hh-4}" text-anchor="${['start','middle','end'][i]}" ${i===2?`dx="-${pr-4}"`:''}>${fmtT(t)}</text>`)}
  else for(let h=0;h<=24;h+=6){const t=t0+h*3600e3;if(t<=tEnd)ticks+=`<text x="${x(t)}" y="${Hh-4}" text-anchor="${h?'middle':'start'}">${h===0?'12a':h===12?'12p':h>12?(h-12)+'p':h+'a'}</text>`}
  const yt=[Math.round(lo+10),Math.round(hi-5)].map(v=>`<text x="${W-2}" y="${y(v)+3}" text-anchor="end">${v}</text>`).join('');
- return `<svg class="chart" viewBox="0 0 ${W} ${Hh}" width="100%" preserveAspectRatio="none" style="display:block;height:${Hh}px">
+ const svgOut=`<svg class="chart" viewBox="0 0 ${W} ${Hh}" width="100%" preserveAspectRatio="none" style="display:block;height:${Hh}px">
   <defs><linearGradient id="hg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".10"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></linearGradient></defs>
   ${bands}${zl}<path d="${area}" fill="url(#hg)"/>${segs}${ticks}${yt}</svg>`;
+ if(!scrub) return svgOut;
+ const k='c'+(++chartSeq); window.__charts[k]={ds,t0,tEnd,W,pl,pr};
+ return `<div class="scrub" data-k="${k}">${svgOut}<div class="vline"></div><div class="tip"></div></div>`;
 }
-function barChart(vals,labels,goal,color){
+function barChart(vals,labels,goal,color,keys){
  const W=520,Hh=120,pb=20,max=Math.max(goal||0,...vals,1)*1.08,bw=(W/vals.length)*.56;
- const bars=vals.map((v,i)=>{const cx=(i+.5)*W/vals.length,h=(v/max)*(Hh-pb-6);const on=goal&&v>=goal;return `<rect x="${cx-bw/2}" y="${Hh-pb-h}" width="${bw}" height="${Math.max(h,2)}" rx="6" fill="${on?color:(i===vals.length-1?color:'#2A303A')}" opacity="${on||i===vals.length-1?1:.9}"/><text x="${cx}" y="${Hh-5}" text-anchor="middle">${labels[i]}</text>`}).join('');
+ const bars=vals.map((v,i)=>{const cx=(i+.5)*W/vals.length,h=(v/max)*(Hh-pb-6);const on=goal&&v>=goal;return `<g ${keys?`data-a="day" data-d="${keys[i]}" class="tap"`:''}><rect x="${cx-W/vals.length/2}" y="0" width="${W/vals.length}" height="${Hh}" fill="transparent"/><rect x="${cx-bw/2}" y="${Hh-pb-h}" width="${bw}" height="${Math.max(h,2)}" rx="6" fill="${on?color:(i===vals.length-1?color:'#2A303A')}" opacity="${on||i===vals.length-1?1:.9}"/><text x="${cx}" y="${Hh-5}" text-anchor="middle">${labels[i]}</text></g>`}).join('');
  const gl=goal?`<line x1="0" x2="${W}" y1="${Hh-pb-(goal/max)*(Hh-pb-6)}" y2="${Hh-pb-(goal/max)*(Hh-pb-6)}" stroke="rgba(255,255,255,.2)" stroke-dasharray="3 4"/>`:'';
  return `<svg class="chart" viewBox="0 0 ${W} ${Hh}" width="100%" style="display:block">${gl}${bars}</svg>`;
 }
@@ -488,24 +527,24 @@ function vToday(){
   html+=`<div class="alert live"><div class="ic pulse">${ico('heart','#FF6B57')}</div><div style="flex:1"><div class="t">Looks like you're working out</div><div class="d">Heart rate elevated for ${m} min · now ${live.bpm} bpm</div>
   <div class="row" style="gap:8px"><button class="btn sm primary" data-a="logdet" data-s="${live.start}" data-e="${Date.now()}">Log as workout</button><button class="btn sm ghost" data-a="tab" data-t="workouts">Later</button></div></div></div>`}
  sessions.slice(-2).reverse().forEach(x=>{
-  html+=`<div class="alert det"><div class="ic">${ico('bolt','#C5F25A')}</div><div style="flex:1"><div class="t">You worked out ${dkey(x.start)===today?'':dayLabel(dkey(x.start)).toLowerCase()+' '}${fmtT(x.start)}–${fmtT(x.end)}</div>
+  html+=`<div class="alert det tap" data-a="detview" data-s="${x.start}" data-e="${x.end}"><div class="ic">${ico('bolt','#C5F25A')}</div><div style="flex:1"><div class="t">You worked out ${dkey(x.start)===today?'':dayLabel(dkey(x.start)).toLowerCase()+' '}${fmtT(x.start)}–${fmtT(x.end)}</div>
   <div class="d">${dur(x.min)} · avg ${x.avg} bpm · peak ${x.peak} · ~${x.kcal} kcal. Not logged yet.</div>
   <div class="row" style="gap:8px"><button class="btn sm primary" data-a="logdet" data-s="${x.start}" data-e="${x.end}" data-k="${x.kcal}">Log it</button><button class="btn sm ghost" data-a="dismiss" data-s="${x.start}">Not a workout</button></div></div></div>`});
- html+=`<div class="card"><div class="ringwrap"><div class="ring">${ring(steps/s.stepGoal,'#C5F25A')}<div class="c"><div><b class="num">${fmtN(steps)}</b><span>of ${fmtN(s.stepGoal)} steps</span></div></div></div>
+ html+=`<div class="card"><div class="ringwrap"><div class="ring tap" data-a="steps">${ring(steps/s.stepGoal,'#C5F25A')}<div class="c"><div><b class="num">${fmtN(steps)}</b><span>of ${fmtN(s.stepGoal)} steps</span></div></div></div>
   <div class="ministats">
-   <div class="ms"><i style="background:var(--fd-d)">${ico('flame','#F5B84A')}</i><div><div class="v num">${fmtN(actK)}</div><div class="l">active kcal</div></div></div>
-   <div class="ms"><i style="background:var(--acc-d)">${ico('timer','#C5F25A')}</i><div><div class="v num">${Math.round(exMin)} min</div><div class="l">exercise · ${wToday.length} workout${wToday.length===1?'':'s'}</div></div></div>
-   <div class="ms"><i style="background:var(--hr-d)">${ico('heart','#FF6B57')}</i><div><div class="v num" style="color:${lastHR?zoneOf(lastHR.bpm).c:'inherit'}">${lastHR?lastHR.bpm:'—'} <span class="muted small" style="font-weight:500">bpm</span></div><div class="l">${lastHR?zoneOf(lastHR.bpm).n+' · ':''}resting ${restHR()}</div></div></div>
+   <div class="ms tap" data-a="kcal"><i style="background:var(--fd-d)">${ico('flame','#F5B84A')}</i><div><div class="v num">${fmtN(actK)}</div><div class="l">active kcal</div></div></div>
+   <div class="ms tap" data-a="tab" data-t="workouts"><i style="background:var(--acc-d)">${ico('timer','#C5F25A')}</i><div><div class="v num">${Math.round(exMin)} min</div><div class="l">exercise · ${wToday.length} workout${wToday.length===1?'':'s'}</div></div></div>
+   <div class="ms tap" data-a="hr"><i style="background:var(--hr-d)">${ico('heart','#FF6B57')}</i><div><div class="v num" style="color:${lastHR?zoneOf(lastHR.bpm).c:'inherit'}">${lastHR?lastHR.bpm:'—'} <span class="muted small" style="font-weight:500">bpm</span></div><div class="l">${lastHR?zoneOf(lastHR.bpm).n+' · ':''}resting ${restHR()}</div></div></div>
   </div></div></div>`;
- html+=`<div class="card"><h3>Heart rate today <span class="pill hr">${lastHR?'Last '+fmtT(lastHR.t):'—'}</span></h3>${hrChart(h.hr||[],[...sessions,...allWorkouts()],th)}
-  ${zoneLegend()}<div class="tiny muted" style="margin-top:6px">Line colour = heart-rate zone (% of your max ${maxHR()} bpm). Shaded = workouts.</div></div>`;
+ html+=`<div class="card tap" data-a="hr"><h3>Heart rate today <span class="pill hr">${lastHR?'Last '+fmtT(lastHR.t):'—'}</span></h3>${hrChart(h.hr||[],[...sessions,...allWorkouts()],th)}
+  ${zoneLegend()}<div class="tiny muted" style="margin-top:6px">Tap for details · line colour = heart-rate zone (max ${maxHR()} bpm)</div></div>`;
  const net=eaten-actK;
  html+=`<div class="grid2">
-  <div class="card" style="margin:0" data-a="tab" data-t="food"><h3>Food</h3><div class="stat"><div class="v num">${fmtN(eaten)}<small>/ ${fmtN(s.kcalGoal)}</small></div><div class="l">kcal eaten</div></div><div class="bar" style="margin-top:10px"><i style="width:${Math.min(100,eaten/s.kcalGoal*100)}%;background:var(--fd)"></i></div></div>
-  <div class="card" style="margin:0" data-a="sleep"><h3>Sleep</h3>${h.sleep?`<div class="stat"><div class="v num">${Math.floor(h.sleep.minutes/60)}<small>h</small> ${pad(h.sleep.minutes%60)}<small>m</small></div><div class="l">${fmtT(h.sleep.start)} – ${fmtT(h.sleep.end)}</div></div><div class="bar" style="margin-top:10px"><i style="width:${Math.min(100,h.sleep.minutes/480*100)}%;background:var(--sl)"></i></div>`:'<div class="muted small">No sleep data</div>'}</div>
+  <div class="card tap" style="margin:0" data-a="tab" data-t="food"><h3>Food <span class="chev">›</span></h3><div class="stat"><div class="v num">${fmtN(eaten)}<small>/ ${fmtN(s.kcalGoal)}</small></div><div class="l">kcal eaten</div></div><div class="bar" style="margin-top:10px"><i style="width:${Math.min(100,eaten/s.kcalGoal*100)}%;background:var(--fd)"></i></div></div>
+  <div class="card tap" style="margin:0" data-a="sleep"><h3>Sleep <span class="chev">›</span></h3>${h.sleep?`<div class="stat"><div class="v num">${Math.floor(h.sleep.minutes/60)}<small>h</small> ${pad(h.sleep.minutes%60)}<small>m</small></div><div class="l">${fmtT(h.sleep.start)} – ${fmtT(h.sleep.end)}</div></div><div class="bar" style="margin-top:10px"><i style="width:${Math.min(100,h.sleep.minutes/480*100)}%;background:var(--sl)"></i></div>`:'<div class="muted small">No sleep data</div>'}</div>
  </div><div style="height:12px"></div>`;
  const s7=h.steps7||[]; if(s7.length){const avg=s7.slice(0,6).reduce((a,b)=>a+b.steps,0)/Math.max(1,s7.slice(0,6).length);
-  html+=`<div class="card"><h3>Steps · 7 days <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:500">avg ${fmtN(avg)}</span></h3>${barChart(s7.map(x=>x.steps),s7.map(x=>new Date(x.date+'T12:00').toLocaleDateString([], {weekday:'narrow'})),s.stepGoal,'#C5F25A')}</div>`}
+  html+=`<div class="card"><h3><span class="tap" data-a="steps">Steps · 7 days <span class="chev">›</span></span><span class="muted" style="text-transform:none;letter-spacing:0;font-weight:500">avg ${fmtN(avg)}</span></h3>${barChart(s7.map(x=>x.steps),s7.map(x=>new Date(x.date+'T12:00').toLocaleDateString([], {weekday:'narrow'})),s.stepGoal,'#C5F25A',s7.map(x=>x.date))}<div class="tiny muted" style="margin-top:4px">Tap a day for details</div></div>`}
  html+=`<div class="card"><h3>Recent workouts <a data-a="tab" data-t="workouts">See all</a></h3>${workoutList(allWorkouts().slice(0,3))}</div>`;
  if(S.settings.demo) html+=`<div class="note">You're looking at <b>demo data</b>. Connect your Fitbit Air in ${'<span class="link" data-a="settings">Settings</span>'} to see your own.</div>`;
  return html;
@@ -513,19 +552,20 @@ function vToday(){
 function workoutList(ws,del){
  if(!ws.length) return `<div class="empty">${ico('run')}<div>No workouts yet</div></div>`;
  return '<div class="list">'+ws.map(w=>{const m=(w.end-w.start)/60e3;const src=w.local?(w.synced?'<span class="pill acc">Synced</span>':'<span class="pill">Manual</span>'):(w.source==='fitbit'?'<span class="pill sl">Fitbit</span>':'<span class="pill sl">Google Health</span>');
-  return `<div class="li" ${w.local&&w.hr?`data-a="wdetail" data-id="${w.id}" style="cursor:pointer"`:''}><div class="ic">${ico(typeIcon(w.type),'#C5F25A')}</div><div class="m"><div class="t">${esc(w.name||typeName(w.type))}</div><div class="s">${fmtD(w.start)} · ${fmtT(w.start)} · ${dur(m)}${w.distanceKm?` · ${w.distanceKm.toFixed(1)} km`:''}</div><div style="margin-top:4px">${src}${w.hr?' <span class="pill hr">Live HR</span>':''}</div></div><div class="r num">${w.kcal?fmtN(w.kcal):'—'}<small>kcal</small></div>${del&&w.local?`<button class="del" data-a="delw" data-id="${w.id}">${ico('trash')}</button>`:''}</div>`}).join('')+'</div>';
+  return `<div class="li tap" data-a="wdetail" data-id="${esc(w.id)}"><div class="ic">${ico(typeIcon(w.type),'#C5F25A')}</div><div class="m"><div class="t">${esc(w.name||typeName(w.type))}</div><div class="s">${fmtD(w.start)} · ${fmtT(w.start)} · ${dur(m)}${w.distanceKm?` · ${w.distanceKm.toFixed(1)} km`:''}</div><div style="margin-top:4px">${src}${w.hr?' <span class="pill hr">Live HR</span>':''}</div></div><div class="r num">${w.kcal?fmtN(w.kcal):'—'}<small>kcal</small></div><span class="chev">›</span></div>`}).join('')+'</div>';
 }
 function vWorkouts(){
  const ws=allWorkouts(), wk=ws.filter(w=>w.start>=addDays(sod(new Date()),-6).getTime());
  let html=header('Workouts');
- html+=`<div class="card"><div class="grid3"><div class="stat"><div class="v num">${wk.length}</div><div class="l">this week</div></div><div class="stat"><div class="v num">${Math.round(wk.reduce((a,w)=>a+(w.end-w.start)/60e3,0))}<small>min</small></div><div class="l">active time</div></div><div class="stat"><div class="v num">${fmtN(sumF(wk,'kcal'))}</div><div class="l">kcal burned</div></div></div></div>`;
+ html+=`<div class="card tap" data-a="week"><h3>Last 7 days <span class="chev">›</span></h3><div class="grid3"><div class="stat"><div class="v num">${wk.length}</div><div class="l">workouts</div></div><div class="stat"><div class="v num">${Math.round(wk.reduce((a,w)=>a+(w.end-w.start)/60e3,0))}<small>min</small></div><div class="l">active time</div></div><div class="stat"><div class="v num">${fmtN(sumF(wk,'kcal'))}</div><div class="l">kcal burned</div></div></div></div>`;
  html+=S.active?`<button class="btn primary block" data-a="resume" style="margin-bottom:6px">${ico('heart','#11140A')} Workout in progress — open</button>`:`<div class="grid2" style="margin-bottom:6px"><button class="btn primary" data-a="startw">${ico('play','#11140A')} Start workout</button><button class="btn" data-a="logw">${ico('plus')} Log past workout</button></div>`;
  const {sessions}=detectSessions();
- if(sessions.length) html+=`<div class="dayh">Detected — not logged</div><div class="card">`+'<div class="list">'+sessions.slice().reverse().map(x=>`<div class="li"><div class="ic">${ico('bolt','#C5F25A')}</div><div class="m"><div class="t">${dayLabel(dkey(x.start))}, ${fmtT(x.start)}</div><div class="s">${dur(x.min)} · avg ${x.avg} bpm · ~${x.kcal} kcal</div></div><button class="btn sm primary" data-a="logdet" data-s="${x.start}" data-e="${x.end}" data-k="${x.kcal}">Log</button></div>`).join('')+'</div></div>';
+ if(sessions.length) html+=`<div class="dayh">Detected — not logged</div><div class="card">`+'<div class="list">'+sessions.slice().reverse().map(x=>`<div class="li tap" data-a="detview" data-s="${x.start}" data-e="${x.end}"><div class="ic">${ico('bolt','#C5F25A')}</div><div class="m"><div class="t">${dayLabel(dkey(x.start))}, ${fmtT(x.start)}</div><div class="s">${dur(x.min)} · avg ${x.avg} bpm · ~${x.kcal} kcal</div></div><button class="btn sm primary" data-a="logdet" data-s="${x.start}" data-e="${x.end}" data-k="${x.kcal}">Log</button></div>`).join('')+'</div></div>';
  const groups={};ws.forEach(w=>{const k=dkey(w.start);(groups[k]=groups[k]||[]).push(w)});
  const keys=Object.keys(groups).sort().reverse();
  if(!keys.length) html+=`<div class="card">${workoutList([])}</div>`;
  keys.forEach(k=>{html+=`<div class="dayh">${dayLabel(k)}</div><div class="card">${workoutList(groups[k],true)}</div>`});
+ html+=`<button class="btn ghost block" data-a="older" style="margin-top:14px">Load older workouts</button>`;
  return html;
 }
 function vFood(){
@@ -543,7 +583,7 @@ function vFood(){
  html+=`<button class="btn primary block" data-a="logf" style="margin-bottom:6px">${ico('plus','#11140A')} Add food</button>`;
  ['Breakfast','Lunch','Dinner','Snack'].forEach(m=>{const items=fs.filter(x=>x.meal===m);
   html+=`<div class="dayh between"><span>${m}</span><span class="num">${items.length?fmtN(sumF(items,'kcal'))+' kcal':''}</span></div><div class="card" style="padding:${items.length?'12px 16px':'4px 16px'}">`+
-  (items.length?'<div class="list">'+items.map(x=>`<div class="li"><div class="m"><div class="t">${esc(x.name)}</div><div class="s num">P ${Math.round(x.protein||0)}g · C ${Math.round(x.carbs||0)}g · F ${Math.round(x.fat||0)}g</div></div><div class="r num">${fmtN(x.kcal)}<small>kcal</small></div><button class="del" data-a="delf" data-id="${x.id}">${ico('trash')}</button></div>`).join('')+'</div>'
+  (items.length?'<div class="list">'+items.map(x=>`<div class="li tap" data-a="editf" data-id="${x.id}"><div class="m"><div class="t">${esc(x.name)}</div><div class="s num">P ${Math.round(x.protein||0)}g · C ${Math.round(x.carbs||0)}g · F ${Math.round(x.fat||0)}g</div></div><div class="r num">${fmtN(x.kcal)}<small>kcal</small></div><span class="chev">›</span></div>`).join('')+'</div>'
   :`<button class="link" style="padding:10px 0" data-a="logf" data-m="${m}">+ Add ${m.toLowerCase()}</button>`)+'</div>'});
  return html;
 }
@@ -560,7 +600,7 @@ function vWeight(){
  html+=`<div class="card"><div class="between" style="margin-bottom:12px"><h3 style="margin:0">Trend</h3><div class="seg" style="width:170px">${[30,90,365].map(d=>`<button class="${weightRange===d?'on':''}" data-a="wr" data-d="${d}">${d===365?'1Y':d+'D'}</button>`).join('')}</div></div>${weightChart(ws,weightRange)}<div class="tiny muted" style="margin-top:6px">Line = 7-day average · dots = weigh-ins</div></div>`;
  html+=`<button class="btn primary block" data-a="logwt" style="margin-bottom:6px">${ico('plus','#11140A')} Log weight</button>`;
  html+=`<div class="dayh">History</div><div class="card">`+(ws.length?'<div class="list">'+ws.slice().reverse().slice(0,40).map((w,i,arr)=>{const prev=arr[i+1];const d=prev?kgToU(w.kg)-kgToU(prev.kg):null;
-  return `<div class="li"><div class="m"><div class="t num">${kgToU(w.kg).toFixed(1)} ${u}</div><div class="s">${fmtD(w.t)} · ${fmtT(w.t)} ${w.local?(w.synced?'· synced':''):'· Google Health'}</div></div><div class="r num small" style="color:${d==null?'var(--mu)':d<=0?'var(--acc)':'var(--hr)'}">${d==null?'':fmtCh(d)}</div>${w.local?`<button class="del" data-a="delwt" data-id="${w.id}">${ico('trash')}</button>`:''}</div>`}).join('')+'</div>':`<div class="empty">${ico('scale')}<div>No weigh-ins yet</div></div>`)+'</div>';
+  return `<div class="li tap" data-a="wtdetail" data-t="${w.t}"><div class="m"><div class="t num">${kgToU(w.kg).toFixed(1)} ${u}</div><div class="s">${fmtD(w.t)} · ${fmtT(w.t)} ${w.local?(w.synced?'· synced':''):'· Google Health'}</div></div><div class="r num small" style="color:${d==null?'var(--mu)':d<=0?'var(--acc)':'var(--hr)'}">${d==null?'':fmtCh(d)}</div><span class="chev">›</span></div>`}).join('')+'</div>':`<div class="empty">${ico('scale')}<div>No weigh-ins yet</div></div>`)+'</div>';
  return html;
 }
 function mdLite(t){
@@ -658,21 +698,22 @@ function sheetWorkout(pre={}){
    if(root.querySelector('#wsync').classList.contains('on')&&canSync()){try{if(await ensureToken()){const n=await pushWorkout(w);w.synced=true;if(typeof n==='string')w.remote=n;save();render();toast('Saved to Google Health')}}catch(err){toast('Google Health: '+err.message)}}
   })});
 }
-function sheetFood(meal){
- const h=new Date().getHours(); meal=meal||(h<11?'Breakfast':h<15?'Lunch':h<20?'Dinner':'Snack');
+function sheetFood(meal,item){
+ const h=new Date().getHours(); meal=(item&&item.meal)||meal||(h<11?'Breakfast':h<15?'Lunch':h<20?'Dinner':'Snack');
  const recent=[];S.foods.slice().reverse().forEach(f=>{if(!recent.some(r=>r.name.toLowerCase()===f.name.toLowerCase())&&recent.length<8)recent.push(f)});
- openSheet(`<h2>Add food</h2><form id="ff">
+ openSheet(`<h2>${item?'Edit food':'Add food'}</h2><form id="ff">
   <label class="f"><span>Meal</span>${chipGroup('meal',['Breakfast','Lunch','Dinner','Snack'].map(m=>[m,m]),meal)}</label>
   ${recent.length?`<label class="f"><span>Recent</span><div class="chips">${recent.map((r,i)=>`<button type="button" class="chip" data-a="recent" data-i="${i}">${esc(r.name)} · ${r.kcal}</button>`).join('')}</div></label>`:''}
   <label class="f"><span>What did you eat?</span><div class="row" style="gap:8px"><input class="inp" name="name" required placeholder="e.g. 2 eggs, toast and coffee"><button type="button" class="btn sm ghost" id="aiest" style="height:46px;flex:none">${ico('coach')} Estimate</button></div></label>
   <div class="grid2"><label class="f"><span>Calories</span><input class="inp num" type="number" inputmode="numeric" name="kcal" required></label><label class="f"><span>Protein (g)</span><input class="inp num" type="number" inputmode="decimal" name="protein"></label></div>
   <div class="grid2"><label class="f"><span>Carbs (g)</span><input class="inp num" type="number" inputmode="decimal" name="carbs"></label><label class="f"><span>Fat (g)</span><input class="inp num" type="number" inputmode="decimal" name="fat"></label></div>
-  <button class="btn primary block" type="submit">Add to ${foodDay===dkey(new Date())?'today':dayLabel(foodDay)}</button></form>`,root=>{wireChips(root);const F=root.querySelector('#ff');
+  ${item?`<div class="row" style="gap:8px"><button type="button" class="btn danger" id="fdel" style="flex:1">Delete</button><button class="btn primary" type="submit" style="flex:2">Save changes</button></div>`:`<button class="btn primary block" type="submit">Add to ${foodDay===dkey(new Date())?'today':dayLabel(foodDay)}</button>`}</form>`,root=>{wireChips(root);const F=root.querySelector('#ff');
+  if(item){['name','kcal','protein','carbs','fat'].forEach(k=>F.elements[k].value=item[k]??'');root.querySelector('#fdel').onclick=()=>{S.foods=S.foods.filter(f=>f.id!==item.id);save();closeSheet();render();toast('Deleted')}}
   root.querySelectorAll('[data-a=recent]').forEach(b=>b.addEventListener('click',()=>{const r=recent[+b.dataset.i];['name','kcal','protein','carbs','fat'].forEach(k=>F.elements[k].value=r[k]??'')}));
   root.querySelector('#aiest').addEventListener('click',async ev=>{const q=F.elements.name.value.trim();if(!q)return toast('Describe the food first');if(!S.settings.apiKey)return toast('Add an AI key in Settings to estimate');const b=ev.currentTarget;b.disabled=true;b.textContent='…';
    try{const t=await askClaude([{role:'user',content:q}],'Estimate nutrition for the food described (typical portion if not given; assume Maldivian/South Asian portions if ambiguous). Reply with ONLY compact JSON: {"name":short name,"kcal":int,"protein":g,"carbs":g,"fat":g}',200);const j=JSON.parse(t.match(/\{[\s\S]*\}/)[0]);
     F.elements.name.value=j.name||q;['kcal','protein','carbs','fat'].forEach(k=>F.elements[k].value=Math.round(+j[k]||0))}catch(e){toast('Estimate failed: '+e.message)}b.disabled=false;b.innerHTML=ico('coach')+' Estimate'});
-  F.addEventListener('submit',e=>{e.preventDefault();const f=new FormData(F);S.foods.push({id:uid(),date:foodDay,meal:root.querySelector('[data-g=meal]').dataset.val,name:f.get('name').trim(),kcal:Math.round(+f.get('kcal')||0),protein:+f.get('protein')||0,carbs:+f.get('carbs')||0,fat:+f.get('fat')||0,t:Date.now()});save();closeSheet();render();toast('Food added')});
+  F.addEventListener('submit',e=>{e.preventDefault();const f=new FormData(F);if(item){Object.assign(item,{meal:root.querySelector('[data-g=meal]').dataset.val,name:f.get('name').trim(),kcal:Math.round(+f.get('kcal')||0),protein:+f.get('protein')||0,carbs:+f.get('carbs')||0,fat:+f.get('fat')||0});save();closeSheet();render();toast('Saved');return}S.foods.push({id:uid(),date:foodDay,meal:root.querySelector('[data-g=meal]').dataset.val,name:f.get('name').trim(),kcal:Math.round(+f.get('kcal')||0),protein:+f.get('protein')||0,carbs:+f.get('carbs')||0,fat:+f.get('fat')||0,t:Date.now()});save();closeSheet();render();toast('Food added')});
  });
 }
 function sheetWeight(){
@@ -839,14 +880,141 @@ async function finishLive(sync){
  if(sync&&canSync()){try{if(await ensureToken()){const n=await pushWorkout(w);w.synced=true;if(typeof n==='string')w.remote=n;save();render();toast('Saved to Google Health')}}catch(err){toast('Google Health: '+err.message)}}
  sheetWorkoutDetail(w);
 }
-function sheetWorkoutDetail(w){
- const hr=(w.hr||[]).map(x=>({t:x[0],bpm:x[1]})), tot=(w.zoneSecs||[]).reduce((a,b)=>a+b,0)||1;
- openSheet(`<h2>${esc(w.name||typeName(w.type))}</h2><div class="small muted" style="margin:-10px 0 14px">${fmtD(w.start)} · ${fmtT(w.start)}–${fmtT(w.end)}</div>
- <div class="grid3" style="margin-bottom:14px"><div class="stat"><div class="v num">${dur((w.end-w.start)/60e3)}</div><div class="l">time</div></div><div class="stat"><div class="v num" style="color:${w.avgHR?zoneOf(w.avgHR).c:'inherit'}">${w.avgHR||'--'}</div><div class="l">avg bpm · max ${w.maxHR||'--'}</div></div><div class="stat"><div class="v num">${fmtN(w.kcal)}</div><div class="l">kcal</div></div></div>
- ${hr.length>1?hrChart(hr,[],0,w.start,w.end,140):''}
- ${w.zoneSecs?`<div class="sec">Time in zones</div>`+ZONES.map((z,i)=>w.zoneSecs[i]>=1?`<div class="row" style="gap:10px;margin-bottom:8px"><span class="small" style="width:66px;color:${z.c}">${z.n}</span><div class="bar" style="flex:1"><i style="width:${w.zoneSecs[i]/tot*100}%;background:${z.c}"></i></div><span class="small muted num" style="width:52px;text-align:right">${Math.round(w.zoneSecs[i]/60)} min</span></div>`:'').join(''):''}
+/* ============ Details ============ */
+// Heart-rate stats for any time window: zones, calories, training load (TRIMP)
+function hrStats(pts,t0,t1){
+ const sm=pts.filter(x=>x.t>=t0&&x.t<=t1); const secs=new Array(ZONES.length).fill(0); let kcal=0,load=0;
+ const rest=restHR(),mx=maxHR(),male=S.settings.sex!=='female';
+ for(let i=0;i<sm.length;i++){const dt=Math.min(120,((i+1<sm.length?sm[i+1].t:Math.min(t1,sm[i].t+5000))-sm[i].t)/1000);secs[zoneIdx(sm[i].bpm)]+=dt;kcal+=kcalPerMin(sm[i].bpm)*dt/60;
+  const r=Math.max(0,Math.min(1,(sm[i].bpm-rest)/(mx-rest)));load+=dt/60*r*0.64*Math.exp((male?1.92:1.67)*r)}
+ const b=sm.map(x=>x.bpm);
+ return {n:sm.length,avg:b.length?Math.round(b.reduce((a,c)=>a+c,0)/b.length):null,max:b.length?Math.max(...b):null,min:b.length?Math.min(...b):null,secs,kcal:Math.round(kcal),load:Math.round(load),pts:sm};
+}
+const loadLabel=l=>l<25?'Light':l<60?'Moderate':l<120?'Hard':'Very hard';
+// Heart-rate samples for a window: stored with the workout, cached, or fetched from Google Health
+async function hrFor(id,t0,t1){
+ S.hrCache=S.hrCache||{};
+ if(S.hrCache[id]) return S.hrCache[id].map(x=>({t:x[0],bpm:x[1]}));
+ const local=(H().hr||[]).filter(x=>x.t>=t0&&x.t<=t1);
+ if(S.settings.demo||!S.settings.connected) return local;
+ if(local.length>20&&local[0].t-t0<5*60e3) return local;
+ if(!(await ensureToken())) return local;
+ const a=new Date(t0).toISOString(),b=new Date(t1).toISOString();
+ let pts; try{pts=await listAll('heart-rate',`heart_rate.sample_time.physical_time >= "${a}" AND heart_rate.sample_time.physical_time <= "${b}"`,20000)}
+ catch(e){pts=await listAll('heart-rate',`heart_rate.sample_time.physical_time >= "${a}"`,20000)}
+ const arr=pts.map(p=>[Date.parse(p.heartRate.sampleTime.physicalTime),+p.heartRate.beatsPerMinute]).filter(x=>x[0]>=t0&&x[0]<=t1&&x[1]).sort((x,y)=>x[0]-y[0]);
+ const ds=[];let lt=0;arr.forEach(x=>{if(x[0]-lt>=5000){ds.push(x);lt=x[0]}});
+ if(ds.length){S.hrCache[id]=ds;const ks=Object.keys(S.hrCache);if(ks.length>80)delete S.hrCache[ks[0]];save()}
+ return ds.map(x=>({t:x[0],bpm:x[1]}));
+}
+function tile(v,l,c){return `<div class="tile"><div class="v num" ${c?`style="color:${c}"`:''}>${v}</div><div class="l">${l}</div></div>`}
+function zoneRows(secs){const tot=secs.reduce((a,b)=>a+b,0)||1;return ZONES.map((z,i)=>`<div class="zrow"><span class="n" style="color:${z.c}">${z.n}</span><div class="bar"><i style="width:${secs[i]/tot*100}%;background:${z.c}"></i></div><span class="m num">${secs[i]>=60?dur(secs[i]/60):Math.round(secs[i])+' s'} · ${Math.round(secs[i]/tot*100)}%</span></div>`).join('')}
+function findWorkout(id){return allWorkouts().find(w=>String(w.id)===String(id))}
+
+async function sheetWorkoutDetail(w){
+ const m=(w.end-w.start)/60e3, src=w.local?(w.live?'Recorded live in Pulse':w.detected?'Detected by Pulse':'Logged manually'):'Recorded by Fitbit';
+ const render_=(hs,loading)=>{
+  const kcal=w.kcal||(hs&&hs.kcal)||0, pace=w.distanceKm?(m/w.distanceKm):null;
+  let x=`<div class="dhead"><div class="ic">${ico(typeIcon(w.type),'#C5F25A')}</div><div><h2>${esc(w.name||typeName(w.type))}</h2><div class="small muted">${fmtD(w.start)} · ${fmtT(w.start)}–${fmtT(w.end)}</div></div></div>
+  <div class="tiles">${tile(dur(m),'duration')}${tile(fmtN(kcal)+'<small>kcal</small>','calories'+(w.kcal?'':' (est.)'))}
+  ${tile(hs&&hs.avg?hs.avg:(w.avgHR||'--'),'avg bpm',hs&&hs.avg?zoneOf(hs.avg).c:'')}${tile(hs&&hs.max?hs.max:'--','max bpm',hs&&hs.max?zoneOf(hs.max).c:'')}
+  ${tile(hs&&hs.min?hs.min:'--','min bpm')}${tile(hs&&hs.n?hs.load:'--',hs&&hs.n?'load · '+loadLabel(hs.load):'training load')}
+  ${w.distanceKm?tile(w.distanceKm.toFixed(2)+'<small>km</small>','distance')+tile(`${Math.floor(pace)}:${pad(Math.round(pace%1*60))}`,'pace /km'):''}${w.steps?tile(fmtN(w.steps),'steps'):''}</div>`;
+  if(loading) x+=`<div class="loading">Loading heart rate from Google Health…</div>`;
+  else if(hs&&hs.n>1) x+=`<div class="sec" style="margin-top:4px">Heart rate <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:500">· drag to inspect</span></div>${hrChart(hs.pts,[],0,w.start,w.end,160,true)}<div class="sec">Time in zones</div>${zoneRows(hs.secs)}`;
+  else x+=`<div class="note">No heart-rate data for this workout${S.settings.demo?' in demo mode':S.settings.connected?'':' — connect Google Health to see it'}.</div>`;
+  if(w.notes) x+=`<div class="sec">Notes</div><div class="small">${esc(w.notes)}</div>`;
+  x+=`<div class="tiny muted" style="margin:14px 0 12px">${src}${w.synced?' · saved to Google Health':''}</div>
+  <div class="row" style="gap:8px">${S.settings.apiKey?`<button class="btn ghost" style="flex:1" id="wask">${ico('coach')} Ask coach</button>`:''}${w.local?`<button class="btn danger" id="wdel">Delete</button>`:''}<button class="btn" style="flex:1" data-close>Close</button></div>`;
+  openSheet(x,r=>{r.querySelector('[data-close]').onclick=closeSheet;
+   const d=r.querySelector('#wdel'); if(d) d.onclick=()=>{S.workouts=S.workouts.filter(o=>o.id!==w.id);save();closeSheet();render();toast('Removed from Pulse')};
+   const a=r.querySelector('#wask'); if(a) a.onclick=()=>{closeSheet();go('coach');sendAsk(`Review my ${typeName(w.type)} on ${fmtD(w.start)} ${fmtT(w.start)}: ${dur(m)}, ${kcal} kcal${hs&&hs.avg?`, avg HR ${hs.avg}, max ${hs.max}, training load ${hs.load}, time in zones: ${ZONES.map((z,i)=>z.n+' '+Math.round(hs.secs[i]/60)+'min').join(', ')}`:''}. How did it go and what should I do next?`)};
+  });
+ };
+ if(w.hr&&w.hr.length>1){const pts=w.hr.map(x=>({t:x[0],bpm:x[1]}));render_(hrStats(pts,w.start,w.end));return}
+ render_(null,true);
+ try{const pts=await hrFor(w.id,w.start,w.end);render_(pts.length?hrStats(pts,w.start,w.end):null)}catch(e){render_(null);toast('Heart rate: '+e.message)}
+}
+async function sheetDetected(t0,t1){
+ const pts=(H().hr||[]); const hs=hrStats(pts,t0,t1),m=(t1-t0)/60e3;
+ openSheet(`<div class="dhead"><div class="ic">${ico('bolt','#C5F25A')}</div><div><h2>Detected activity</h2><div class="small muted">${fmtD(t0)} · ${fmtT(t0)}–${fmtT(t1)}</div></div></div>
+ <div class="tiles">${tile(dur(m),'duration')}${tile(hs.kcal+'<small>kcal</small>','calories (est.)')}${tile(hs.load,'load · '+loadLabel(hs.load))}${tile(hs.avg||'--','avg bpm',hs.avg?zoneOf(hs.avg).c:'')}${tile(hs.max||'--','max bpm',hs.max?zoneOf(hs.max).c:'')}${tile(hs.min||'--','min bpm')}</div>
+ ${hs.n>1?hrChart(hs.pts,[],0,t0,t1,150,true):''}<div class="sec">Time in zones</div>${zoneRows(hs.secs)}
+ <div class="row" style="gap:8px;margin-top:14px"><button class="btn ghost" style="flex:1" id="nw">Not a workout</button><button class="btn primary" style="flex:1" id="lg">Log it</button></div>`,r=>{
+  r.querySelector('#lg').onclick=()=>sheetWorkout({start:t0,end:t1,kcal:hs.kcal,detected:true,type:'WORKOUT'});
+  r.querySelector('#nw').onclick=()=>{S.dismissed.push(Math.round(t0/60e3));save();closeSheet();render();toast('Hidden')}});
+}
+function sheetHR(){
+ const h=H(),t0=sod(new Date()).getTime(),pts=(h.hr||[]).filter(x=>x.t>=t0),hs=hrStats(pts,t0,Date.now()),last=pts[pts.length-1];
+ const ws=allWorkouts().filter(w=>w.end>t0);
+ openSheet(`<h2>Heart rate today</h2>
+ <div class="tiles">${tile(last?last.bpm:'--','latest'+(last?' · '+fmtT(last.t):''),last?zoneOf(last.bpm).c:'')}${tile(restHR(),'resting')}${tile(hs.avg||'--','average')}${tile(hs.min||'--','lowest')}${tile(hs.max||'--','highest',hs.max?zoneOf(hs.max).c:'')}${tile(maxHR(),'est. max')}</div>
+ ${hrChart(pts,ws,0,0,0,170,true)}<div class="tiny muted" style="margin:4px 0 6px">Drag across the chart to see exact values</div>
+ <div class="sec">Time in zones today</div>${zoneRows(hs.secs)}
+ ${ws.length?`<div class="sec">Workouts today</div>`+workoutList(ws):''}
+ <div class="tiny muted" style="margin-top:12px">Zones are % of your estimated max heart rate (208 − 0.7 × age). Change your age in Settings.</div>
  <div style="height:12px"></div><button class="btn block" data-close>Close</button>`,r=>r.querySelector('[data-close]').onclick=closeSheet);
 }
+function sheetSteps(){
+ const h=H(),s7=h.steps7||[],g=S.settings.stepGoal,tot=s7.reduce((a,b)=>a+b.steps,0),best=s7.reduce((a,b)=>b.steps>a.steps?b:a,{steps:0}),hit=s7.filter(x=>x.steps>=g).length;
+ const today=s7.find(x=>x.date===dkey(new Date()));
+ openSheet(`<h2>Steps</h2>
+ <div class="tiles">${tile(fmtN(today?today.steps:0),'today')}${tile(Math.round((today?today.steps:0)/g*100)+'<small>%</small>','of goal')}${tile(fmtN(tot/Math.max(1,s7.length)),'7-day avg')}${tile(fmtN(tot),'7-day total')}${tile(fmtN(best.steps),'best · '+(best.date?new Date(best.date+'T12:00').toLocaleDateString([], {weekday:'short'}):''))}${tile(hit+'/7','goal days')}</div>
+ ${barChart(s7.map(x=>x.steps),s7.map(x=>new Date(x.date+'T12:00').toLocaleDateString([], {weekday:'short'})),g,'#C5F25A',s7.map(x=>x.date))}
+ <div class="list" style="margin-top:10px">${s7.slice().reverse().map(x=>`<div class="li tap" data-a="day" data-d="${x.date}"><div class="m"><div class="t">${dayLabel(x.date)}</div><div class="bar" style="margin-top:6px"><i style="width:${Math.min(100,x.steps/g*100)}%;background:${x.steps>=g?'var(--acc)':'#5E6570'}"></i></div></div><div class="r num">${fmtN(x.steps)}</div><span class="chev">›</span></div>`).join('')}</div>
+ <div class="tiny muted" style="margin-top:10px">≈ ${(tot/Math.max(1,s7.length)*0.00075).toFixed(1)} km a day (estimated from steps). Goal: ${fmtN(g)} — change it in Settings.</div>
+ <div style="height:12px"></div><button class="btn block" data-close>Close</button>`,r=>r.querySelector('[data-close]').onclick=closeSheet);
+}
+function sheetKcal(){
+ const h=H(),s7=h.steps7||[],k7=(h.activeKcal7&&h.activeKcal7.length===7)?h.activeKcal7:s7.map(x=>Math.round(x.steps*.045));
+ const days=s7.map(x=>x.date), eaten=days.map(d=>Math.round(sumF(foodsOn(d),'kcal'))), tot=k7.reduce((a,b)=>a+b,0);
+ openSheet(`<h2>Active calories</h2>
+ <div class="tiles">${tile(fmtN(k7[6]||0),'burned today')}${tile(fmtN(eaten[6]||0),'eaten today')}${tile(fmtN(tot/7),'7-day avg')}</div>
+ ${barChart(k7,days.map(d=>new Date(d+'T12:00').toLocaleDateString([], {weekday:'short'})),0,'#F5B84A',days)}
+ <div class="list" style="margin-top:10px">${days.slice().reverse().map((d,j)=>{const i=6-j;return `<div class="li tap" data-a="day" data-d="${d}"><div class="m"><div class="t">${dayLabel(d)}</div><div class="s">${eaten[i]?fmtN(eaten[i])+' kcal eaten':'food not logged'}</div></div><div class="r num">${fmtN(k7[i])}<small>active kcal</small></div><span class="chev">›</span></div>`}).join('')}</div>
+ <div class="tiny muted" style="margin-top:10px">Active calories are what you burn moving, on top of your resting burn.</div>
+ <div style="height:12px"></div><button class="btn block" data-close>Close</button>`,r=>r.querySelector('[data-close]').onclick=closeSheet);
+}
+function sheetDay(d){
+ const h=H(),st=(h.steps7||[]).find(x=>x.date===d),i=(h.steps7||[]).findIndex(x=>x.date===d),k=i>=0&&h.activeKcal7?h.activeKcal7[i]:null;
+ const ws=allWorkouts().filter(w=>dkey(w.start)===d),fs=foodsOn(d),wt=allWeights().filter(w=>dkey(w.t)===d).pop();
+ openSheet(`<h2>${dayLabel(d)}</h2><div class="small muted" style="margin:-10px 0 14px">${fmtD(d+'T12:00')}</div>
+ <div class="tiles">${tile(st?fmtN(st.steps):'--','steps')}${tile(k!=null?fmtN(k):'--','active kcal')}${tile(fmtN(sumF(fs,'kcal')),'kcal eaten')}${tile(ws.length,'workouts')}${tile(dur(ws.reduce((a,w)=>a+(w.end-w.start)/60e3,0)),'exercise')}${tile(wt?kgToU(wt.kg).toFixed(1)+'<small>'+S.settings.unit+'</small>':'--','weight')}</div>
+ <div class="sec">Workouts</div>${workoutList(ws)}
+ <div class="sec">Food</div>${fs.length?'<div class="list">'+fs.map(x=>`<div class="li"><div class="m"><div class="t">${esc(x.name)}</div><div class="s">${x.meal}</div></div><div class="r num">${fmtN(x.kcal)}<small>kcal</small></div></div>`).join('')+'</div>':'<div class="muted small">Nothing logged</div>'}
+ <div style="height:14px"></div><div class="row" style="gap:8px"><button class="btn ghost" style="flex:1" id="gofood">Open food log</button><button class="btn" style="flex:1" data-close>Close</button></div>`,r=>{r.querySelector('[data-close]').onclick=closeSheet;r.querySelector('#gofood').onclick=()=>{foodDay=d;closeSheet();go('food');render()}});
+}
+function sheetWeek(){
+ const t0=addDays(sod(new Date()),-6).getTime(),ws=allWorkouts().filter(w=>w.start>=t0),by={};
+ ws.forEach(w=>{const k=typeName(w.type);(by[k]=by[k]||{n:0,m:0,k:0,t:w.type});by[k].n++;by[k].m+=(w.end-w.start)/60e3;by[k].k+=w.kcal||0});
+ const days=new Set(ws.map(w=>dkey(w.start))).size, mins=ws.reduce((a,w)=>a+(w.end-w.start)/60e3,0);
+ openSheet(`<h2>Last 7 days</h2>
+ <div class="tiles">${tile(ws.length,'workouts')}${tile(dur(mins),'total time')}${tile(fmtN(sumF(ws,'kcal')),'kcal')}${tile(days+'/7','active days')}${tile(ws.length?dur(mins/ws.length):'--','avg length')}${tile(Math.round(Math.min(100,mins/150*100))+'<small>%</small>','of 150 min goal')}</div>
+ <div class="sec">By activity</div>${Object.entries(by).length?'<div class="list">'+Object.entries(by).sort((a,b)=>b[1].m-a[1].m).map(([k,v])=>`<div class="li"><div class="ic">${ico(typeIcon(v.t),'#C5F25A')}</div><div class="m"><div class="t">${esc(k)}</div><div class="s">${v.n}× · ${dur(v.m)}</div></div><div class="r num">${fmtN(v.k)}<small>kcal</small></div></div>`).join('')+'</div>':'<div class="muted small">No workouts this week</div>'}
+ <div class="sec">All workouts</div>${workoutList(ws)}
+ <div class="tiny muted" style="margin-top:10px">Health guidelines suggest at least 150 minutes of moderate activity a week.</div>
+ <div style="height:12px"></div><button class="btn block" data-close>Close</button>`,r=>r.querySelector('[data-close]').onclick=closeSheet);
+}
+function sheetWeightEntry(t){
+ const all=allWeights(),i=all.findIndex(w=>w.t===t),w=all[i];if(!w)return;const prev=all[i-1],u=S.settings.unit,hm=(+S.settings.heightCm||0)/100;
+ const bmi=hm?w.kg/(hm*hm):null;
+ openSheet(`<h2>${kgToU(w.kg).toFixed(1)} ${u}</h2><div class="small muted" style="margin:-10px 0 14px">${fmtD(w.t)} · ${fmtT(w.t)} · ${w.local?'logged in Pulse':'from Google Health'}</div>
+ <div class="tiles">${tile(prev?((kgToU(w.kg)-kgToU(prev.kg))>0?'+':'')+(kgToU(w.kg)-kgToU(prev.kg)).toFixed(1):'--','vs previous')}${tile(bmi?bmi.toFixed(1):'--','BMI'+(hm?'':' (add height)'))}${tile(S.settings.goalWeight?(kgToU(w.kg)-S.settings.goalWeight).toFixed(1):'--','to goal')}</div>
+ <div class="row" style="gap:8px">${w.local?'<button class="btn danger" id="del" style="flex:1">Delete</button>':''}<button class="btn" style="flex:1" data-close>Close</button></div>`,r=>{r.querySelector('[data-close]').onclick=closeSheet;const d=r.querySelector('#del');if(d)d.onclick=()=>{S.weights=S.weights.filter(x=>x.id!==w.id);save();closeSheet();render();toast('Deleted')}});
+}
+// Drag / touch across a heart-rate chart to see exact values
+function scrubAt(el,clientX){
+ const c=window.__charts[el.dataset.k];if(!c||!c.ds.length)return;const r=el.getBoundingClientRect();
+ const fx=(clientX-r.left)/r.width*c.W, t=c.t0+(fx-c.pl)/(c.W-c.pl-c.pr)*(c.tEnd-c.t0);
+ let lo=0,hi=c.ds.length-1;while(hi-lo>1){const m=(lo+hi)>>1;if(c.ds[m].t<t)lo=m;else hi=m}
+ const p=Math.abs(c.ds[lo].t-t)<Math.abs(c.ds[hi].t-t)?c.ds[lo]:c.ds[hi];
+ const px=(c.pl+(p.t-c.t0)/(c.tEnd-c.t0)*(c.W-c.pl-c.pr))/c.W*r.width, z=zoneOf(p.bpm);
+ const v=el.querySelector('.vline'),tip=el.querySelector('.tip');v.style.display=tip.style.display='block';v.style.left=px+'px';
+ tip.style.left=Math.max(50,Math.min(r.width-50,px))+'px';tip.innerHTML=`<span style="color:${z.c}">${Math.round(p.bpm)} bpm</span> · ${fmtT(p.t)} · ${z.n}`;
+}
+['pointerdown','pointermove'].forEach(ev=>document.addEventListener(ev,e=>{const el=e.target.closest&&e.target.closest('.scrub');if(el&&(ev==='pointermove'||e.isPrimary))scrubAt(el,e.clientX)},{passive:true}));
+document.addEventListener('pointerleave',e=>{},true);
+document.addEventListener('pointerout',e=>{const el=e.target.closest&&e.target.closest('.scrub');if(el&&!el.contains(e.relatedTarget)){el.querySelector('.vline').style.display=el.querySelector('.tip').style.display='none'}});
 
 /* ============ Render & events ============ */
 const TABS=[['today','Today','home'],['workouts','Workouts','run'],['food','Food','food'],['weight','Weight','scale'],['coach','Coach','coach']];
@@ -877,7 +1045,16 @@ document.addEventListener('click',e=>{
  else if(a==='sleep') sheetSleep();
  else if(a==='startw') sheetStart();
  else if(a==='resume') openLive();
- else if(a==='wdetail'){const w=S.workouts.find(x=>x.id===el.dataset.id);if(w)sheetWorkoutDetail(w)}
+ else if(a==='wdetail'){const w=findWorkout(el.dataset.id);if(w)sheetWorkoutDetail(w)}
+ else if(a==='detview') sheetDetected(+el.dataset.s,+el.dataset.e);
+ else if(a==='hr') sheetHR();
+ else if(a==='steps') sheetSteps();
+ else if(a==='kcal') sheetKcal();
+ else if(a==='day') sheetDay(el.dataset.d);
+ else if(a==='week') sheetWeek();
+ else if(a==='older') loadOlderWorkouts();
+ else if(a==='editf'){const f=S.foods.find(x=>x.id===el.dataset.id);if(f)sheetFood(f.meal,f)}
+ else if(a==='wtdetail') sheetWeightEntry(+el.dataset.t);
 });
 $('#scrim').addEventListener('click',closeSheet);
 window.addEventListener('hashchange',()=>{const t=location.hash.slice(1);if(TABS.some(x=>x[0]===t))go(t)});

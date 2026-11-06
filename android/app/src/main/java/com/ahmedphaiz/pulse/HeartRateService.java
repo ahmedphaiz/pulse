@@ -28,6 +28,8 @@ import android.os.IBinder;
 import android.os.Looper;
 import android.os.ParcelUuid;
 import android.os.PowerManager;
+import android.os.SystemClock;
+import android.widget.RemoteViews;
 
 import org.json.JSONObject;
 
@@ -68,6 +70,7 @@ public class HeartRateService extends Service {
     private String type = "WORKOUT", label = "Workout", status = "Searching for Fitbit Air…";
     private int maxHr = 187;
     private long start, lastNotif, lastSample;
+    private long hrSum; private int hrCnt, hrMax;
 
     static final double[] ZONE_HI = {.5, .6, .7, .8, .9, 99};
     static final String[] ZONE_N = {"Rest", "Light", "Fat burn", "Cardio", "Hard", "Peak"};
@@ -92,7 +95,7 @@ public class HeartRateService extends Service {
             label = str(intent.getStringExtra("label"), label);
             maxHr = intent.getIntExtra("maxHr", maxHr);
             long s = intent.getLongExtra("start", 0);
-            if (!running) { start = s > 0 ? s : System.currentTimeMillis(); samples.clear(); }
+            if (!running) { start = s > 0 ? s : System.currentTimeMillis(); samples.clear(); hrSum = 0; hrCnt = 0; hrMax = 0; }
         }
         startForeground(NOTIF_ID, build(), ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE);
         if (!running) {
@@ -193,7 +196,7 @@ public class HeartRateService extends Service {
         long now = System.currentTimeMillis();
         lastBpm = bpm;
         if (!connected) setStatus(true, "Live");
-        if (now - lastSample >= 1000) { samples.add(new long[]{now, bpm}); lastSample = now; }
+        if (now - lastSample >= 1000) { samples.add(new long[]{now, bpm}); lastSample = now; hrSum += bpm; hrCnt++; if (bpm > hrMax) hrMax = bpm; }
         MainActivity a = MainActivity.current;
         if (a != null) a.js("window.onNativeHR&&onNativeHR(" + bpm + ")");
         if (now - lastNotif > 2000) { lastNotif = now; notifyNow(); }
@@ -227,9 +230,12 @@ public class HeartRateService extends Service {
             .setContentTitle(live ? lastBpm + " bpm · " + ZONE_N[z] : label)
             .setContentText(live ? label : status)
             .setColor(live ? ZONE_C[z] : 0xFFC5F25A)
+            .setStyle(new Notification.DecoratedCustomViewStyle())
+            .setCustomContentView(card(false))
+            .setCustomBigContentView(card(true))
             .setOngoing(true)
             .setOnlyAlertOnce(true)
-            .setShowWhen(true).setWhen(start == 0 ? System.currentTimeMillis() : start).setUsesChronometer(true)
+            .setShowWhen(false)
             .setCategory(Notification.CATEGORY_STATUS)
             .setVisibility(Notification.VISIBILITY_PUBLIC)
             .setContentIntent(open)
@@ -240,6 +246,37 @@ public class HeartRateService extends Service {
         call(b, "setShortCriticalText", CharSequence.class, live ? String.valueOf(lastBpm) : "--");
         return b.build();
     }
+
+    private static final int[] SEG = {R.id.s1, R.id.s2, R.id.s3, R.id.s4, R.id.s5};
+    private static final int[] LAB = {R.id.z1, R.id.z2, R.id.z3, R.id.z4, R.id.z5};
+
+    /** WHOOP-style live card: big heart rate, running timer and a Zone 1-5 bar that lights up the current zone. */
+    private RemoteViews card(boolean big) {
+        RemoteViews v = new RemoteViews(getPackageName(), big ? R.layout.notif_big : R.layout.notif_small);
+        boolean live = connected && lastBpm > 0;
+        int z = live ? zone(lastBpm) : -1;               // 0 = rest, 1..5 = zone 1..5
+        int col = live ? ZONE_C[z] : 0xFF8B929D;
+        v.setTextViewText(R.id.bpm, live ? String.valueOf(lastBpm) : "--");
+        v.setInt(R.id.heart, "setColorFilter", col);
+        v.setTextViewText(R.id.zone, live ? (z == 0 ? "Resting" : "Zone " + z + " · " + ZONE_N[z]) : status);
+        v.setTextColor(R.id.zone, col);
+        long base = SystemClock.elapsedRealtime() - (System.currentTimeMillis() - (start == 0 ? System.currentTimeMillis() : start));
+        v.setChronometer(R.id.timer, base, null, true);
+        if (big) {
+            v.setTextViewText(R.id.title, ("Pulse · " + label).toUpperCase(Locale.ROOT));
+            for (int i = 0; i < 5; i++) {
+                int zi = i + 1;
+                boolean on = live && z == zi, passed = live && z > zi;
+                v.setInt(SEG[i], "setBackgroundColor", on ? ZONE_C[zi] : passed ? (ZONE_C[zi] & 0x00FFFFFF) | 0x55000000 : 0x33FFFFFF);
+                v.setTextColor(LAB[i], on ? ZONE_C[zi] : 0x80FFFFFF);
+            }
+            String stats = hrCnt > 0 ? "Avg " + Math.round(hrSum / (double) hrCnt) + " · Max " + hrMax + " bpm" : "";
+            v.setTextViewText(R.id.status, connected ? (stats.isEmpty() ? deviceNameOr() : stats + " · " + deviceNameOr()) : (stats.isEmpty() ? status : stats + " · " + status));
+        }
+        return v;
+    }
+
+    private String deviceNameOr() { return deviceName == null ? "Fitbit Air" : deviceName; }
 
     private static void call(Object o, String name, Class<?> t, Object v) {
         try { Method m = o.getClass().getMethod(name, t); m.invoke(o, v); } catch (Exception ignored) {}

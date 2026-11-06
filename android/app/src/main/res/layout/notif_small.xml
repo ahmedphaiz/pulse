@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Collapsed live heart-rate row -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:orientation="horizontal" android:gravity="center_vertical" android:background="@drawable/notif_bg"
+    android:paddingStart="14dp" android:paddingEnd="12dp" android:paddingTop="8dp" android:paddingBottom="8dp">
+    <ImageView android:id="@+id/heart" android:layout_width="20dp" android:layout_height="20dp" android:src="@drawable/ic_heart" />
+    <TextView android:id="@+id/bpm" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="6dp"
+        android:text="--" android:textColor="#FFFFFFFF" android:textSize="24sp" android:textStyle="bold" android:includeFontPadding="false" />
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="3dp"
+        android:text="bpm" android:textColor="#B3FFFFFF" android:textSize="12sp" />
+    <TextView android:id="@+id/zone" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="10dp"
+        android:textColor="#FFC5F25A" android:textSize="13sp" android:textStyle="bold" android:singleLine="true" />
+    <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical"
+        android:background="@drawable/chip_bg" android:paddingStart="7dp" android:paddingEnd="9dp" android:paddingTop="2dp" android:paddingBottom="2dp">
+        <ImageView android:layout_width="13dp" android:layout_height="13dp" android:src="@drawable/ic_timer" />
+        <Chronometer android:id="@+id/timer" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="4dp"
+            android:textColor="#FFFFFFFF" android:textSize="13sp" android:textStyle="bold" />
+    </LinearLayout>
+</LinearLayout>
