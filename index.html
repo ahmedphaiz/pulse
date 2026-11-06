@@ -411,7 +411,9 @@ function allWeights(){
 function allWorkouts(){
  const loc=S.workouts.map(w=>({...w,local:true}));
  const rem=(H().exercises||[]).filter(r=>!S.workouts.some(l=>(l.remote&&l.remote===r.remote)||(Math.abs(l.start-r.start)<120e3&&l.type===r.type)));
- return [...loc,...rem].sort((a,b)=>b.start-a.start);
+ // Google Health sometimes holds the same session twice (e.g. 17:01 and 17:06): keep the longer one
+ const out=[];[...loc,...rem].sort((a,b)=>((b.local?1:0)-(a.local?1:0))||((b.end-b.start)-(a.end-a.start))).forEach(w=>{const dup=out.some(o=>o.type===w.type&&Math.min(o.end,w.end)-Math.max(o.start,w.start)>0.5*Math.min(o.end-o.start,w.end-w.start));if(!dup)out.push(w)});
+ return out.sort((a,b)=>b.start-a.start);
 }
 function kcalPerMin(bpm){const s=S.settings,W=latestWeightKg(),A=+s.age||30;const v=s.sex==='female'?(-20.4022+0.4472*bpm-0.1263*W+0.074*A):(-55.0969+0.6309*bpm+0.1988*W+0.2017*A);return Math.max(0,v/4.184)}
 function restHR(){const h=H();if(h.restingHR)return h.restingHR;const v=(h.hr||[]).map(x=>x.bpm).sort((a,b)=>a-b);return v.length?v[Math.floor(v.length*.1)]:62}
@@ -643,7 +645,7 @@ Weight log: ${wts.join('; ')||'none'}`;
 const SYS=`You are Pulse Coach, a friendly, direct personal fitness coach inside the user's fitness tracker app. You have the user's live data below. Ground every answer in their numbers (cite them briefly). Keep replies short and phone-friendly: 2-5 sentences or up to 5 bullets, under 110 words. Only go longer when the user asks for a plan or more detail. Give concrete, actionable suggestions (sets/reps, durations, targets). Note that you're not a doctor when health concerns come up and suggest seeing one for pain, chest symptoms, dizziness or anything worrying. Never encourage extreme dieting or overtraining.`;
 async function streamClaude(messages,system,maxTokens,onText){
  const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'content-type':'application/json','x-api-key':S.settings.apiKey.trim(),'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-  body:JSON.stringify({model:S.settings.model||'claude-haiku-5-5',max_tokens:maxTokens,system,messages,stream:true})});
+  body:JSON.stringify({model:S.settings.model||'claude-haiku-5-5',max_tokens:maxTokens,system,messages,stream:true,thinking:{type:'disabled'}})});
  if(!r.ok){const j=await r.json().catch(()=>({}));throw new Error((j.error&&j.error.message)||('HTTP '+r.status))}
  const rd=r.body.getReader(),dec=new TextDecoder();let buf='',out='';
  for(;;){const {done,value}=await rd.read();if(done)break;buf+=dec.decode(value,{stream:true});let i;
@@ -654,7 +656,7 @@ async function streamClaude(messages,system,maxTokens,onText){
 }
 async function askClaude(messages,system,maxTokens=700){
  const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'content-type':'application/json','x-api-key':S.settings.apiKey.trim(),'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-  body:JSON.stringify({model:S.settings.model||'claude-haiku-5-5',max_tokens:maxTokens,system,messages})});
+  body:JSON.stringify({model:S.settings.model||'claude-haiku-5-5',max_tokens:maxTokens,system,messages,thinking:{type:'disabled'}})});
  const j=await r.json().catch(()=>({})); if(!r.ok) throw new Error((j.error&&j.error.message)||('HTTP '+r.status));
  return (j.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('\n').trim();
 }
