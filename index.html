@@ -162,6 +162,32 @@ textarea.inp{height:auto;min-height:70px;padding:12px 14px;resize:vertical}
 .note{font-size:12.5px;color:var(--mu);background:var(--s2);border-radius:12px;padding:10px 12px;margin-bottom:14px;line-height:1.5}
 .note code{background:var(--s3);padding:1px 5px;border-radius:5px;font-size:12px}
 svg.i{fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+/* zones */
+.zl{display:flex;flex-wrap:wrap;gap:6px 12px;margin-top:10px}
+.zl span{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--mu)}
+.zl i{width:8px;height:8px;border-radius:50%;display:inline-block}
+/* live workout */
+#live{position:fixed;inset:0;z-index:70;background:#000;display:none;flex-direction:column;padding:calc(var(--st) + 16px) 20px calc(var(--sb) + 20px);user-select:none}
+#live.on{display:flex}
+#live .lt{display:flex;justify-content:space-between;align-items:center}
+#live .lt b{font-size:17px}
+#live .timer{font-size:20px;font-weight:600;color:#ECEEF1}
+#live .hrsrc{font-size:12px;color:var(--mu);display:flex;align-items:center;gap:6px}
+#live .center{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:transform 1.2s}
+#live .bpm{font-size:min(34vw,200px);font-weight:700;line-height:1;letter-spacing:-.04em;font-variant-numeric:tabular-nums;transition:color .6s}
+#live .zname{font-size:20px;font-weight:600;margin-top:6px;letter-spacing:.02em;transition:color .6s}
+#live .zbar{display:flex;gap:4px;width:min(80vw,360px);margin-top:18px}
+#live .zbar i{flex:1;height:8px;border-radius:4px;opacity:.22;transition:opacity .4s}
+#live .zbar i.on{opacity:1}
+#live .lstats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;text-align:center;margin-bottom:16px}
+#live .lstats .v{font-size:22px;font-weight:600}
+#live .lstats .l{font-size:12px;color:var(--mu)}
+#live .lbtns{display:flex;gap:10px}
+#live .lbtns .btn{flex:1;height:52px}
+#live.dim .lt,#live.dim .lstats,#live.dim .lbtns,#live.dim .zbar,#live.dim .hint{opacity:0;pointer-events:none}
+#live.dim .bpm,#live.dim .zname{filter:brightness(.62)}
+#live .hint{text-align:center;font-size:12px;color:var(--mu2);margin-bottom:10px}
+.liveCard{background:linear-gradient(135deg,rgba(255,77,94,.16),rgba(255,77,94,.03));border:1px solid rgba(255,77,94,.3)}
 </style>
 </head>
 <body>
@@ -170,6 +196,7 @@ svg.i{fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 <div class="scrim" id="scrim"></div>
 <div class="sheet" id="sheet"></div>
 <div class="toast" id="toast"></div>
+<div id="live"></div>
 
 <script>
 /* ============ Icons ============ */
@@ -196,6 +223,9 @@ const IC={
  walk:'<circle cx="13" cy="4" r="2"/><path d="M10 22l2-6-3-3 1-5 3 3 3 1M8 12l-1 5"/>',
  swim:'<path d="M2 18c2 0 2-1.5 4-1.5s2 1.5 4 1.5 2-1.5 4-1.5 2 1.5 4 1.5 2-1.5 4-1.5"/><circle cx="16" cy="7" r="2"/><path d="M5 13l5-5 4 4"/>',
  yoga:'<circle cx="12" cy="4" r="2"/><path d="M12 6v7M5 10l7 3 7-3M8 21l4-8 4 8"/>',
+ ball:'<circle cx="12" cy="12" r="9"/><path d="M12 7l4 3-1.5 4.5h-5L8 10z"/><path d="M12 3v4M16 10l4.5-1.5M14.5 14.5l2.5 4M9.5 14.5l-2.5 4M8 10L3.5 8.5"/>',
+ play:'<path d="M7 4l13 8-13 8z"/>',
+ bt:'<path d="M7 7l10 10-5 4V3l5 4L7 17"/>',
  steps:'<path d="M5 17c0-3 1-9 3-9s2 4 2 6-1 3-2.5 3S5 18 5 17zM14 11c0-3 1-9 3-9s2 4 2 6-1 3-2.5 3-2.5 1-2.5 0z"/><path d="M5 20h5M14 14h5"/>',
 };
 const ico=(n,c='currentColor',w=2)=>`<svg class="i" viewBox="0 0 24 24" style="stroke:${c};stroke-width:${w}">${IC[n]||''}</svg>`;
@@ -328,7 +358,7 @@ async function pushWeight(w){
 }
 
 /* ============ Domain helpers ============ */
-const TYPES=[['RUNNING','Run','run'],['WALKING','Walk','walk'],['WEIGHTLIFTING','Strength','dumbbell'],['BIKING','Cycling','bike'],['HIIT','HIIT','bolt'],['YOGA','Yoga','yoga'],['SWIMMING','Swim','swim'],['WORKOUT','Other','flame']];
+const TYPES=[['SOCCER','Football','ball'],['RUNNING','Run','run'],['WALKING','Walk','walk'],['WEIGHTLIFTING','Strength','dumbbell'],['BIKING','Cycling','bike'],['HIIT','HIIT','bolt'],['YOGA','Yoga','yoga'],['SWIMMING','Swim','swim'],['WORKOUT','Other','flame']];
 const typeName=t=>{const f=TYPES.find(x=>x[0]===t);return f?f[1]:String(t||'Workout').toLowerCase().replace(/_/g,' ').replace(/^\w/,c=>c.toUpperCase())};
 const typeIcon=t=>{const f=TYPES.find(x=>x[0]===t);return f?f[2]:(/RUN/.test(t)?'run':/WALK|HIK/.test(t)?'walk':/BIK|CYCL/.test(t)?'bike':/SWIM/.test(t)?'swim':/WEIGHT|STRENGTH|BODY/.test(t)?'dumbbell':'flame')};
 function latestWeightKg(){const all=allWeights();return all.length?all[all.length-1].kg:70}
@@ -343,6 +373,12 @@ function allWorkouts(){
 }
 function kcalPerMin(bpm){const s=S.settings,W=latestWeightKg(),A=+s.age||30;const v=s.sex==='female'?(-20.4022+0.4472*bpm-0.1263*W+0.074*A):(-55.0969+0.6309*bpm+0.1988*W+0.2017*A);return Math.max(0,v/4.184)}
 function restHR(){const h=H();if(h.restingHR)return h.restingHR;const v=(h.hr||[]).map(x=>x.bpm).sort((a,b)=>a-b);return v.length?v[Math.floor(v.length*.1)]:62}
+/* Heart-rate zones, as % of estimated max HR */
+const ZONES=[{n:'Rest',hi:.5,c:'#6AA8FF'},{n:'Light',hi:.6,c:'#5BE3C0'},{n:'Fat burn',hi:.7,c:'#C5F25A'},{n:'Cardio',hi:.8,c:'#F5B84A'},{n:'Hard',hi:.9,c:'#FF8A3D'},{n:'Peak',hi:99,c:'#FF4D5E'}];
+const maxHR=()=>Math.round(208-0.7*(+S.settings.age||30));
+const zoneIdx=b=>{const p=b/maxHR();const i=ZONES.findIndex(z=>p<z.hi);return i<0?ZONES.length-1:i};
+const zoneOf=b=>ZONES[zoneIdx(b)];
+const zoneLegend=()=>'<div class="zl">'+ZONES.map((z,i)=>`<span><i style="background:${z.c}"></i>${z.n} ${i?Math.round(ZONES[i-1].hi*maxHR())+'+':'<'+Math.round(z.hi*maxHR())}</span>`).join('')+'</div>';
 function hrThreshold(){const rest=restHR(),max=208-0.7*(+S.settings.age||30);return Math.max(95,Math.round(rest+0.38*(max-rest)))}
 
 /* Workout detection: sustained elevated heart rate not already covered by a logged workout */
@@ -355,7 +391,7 @@ function detectSessions(){
  for(const m of keys){const[s,c]=mins.get(m),avg=s/c;
   if(avg>=th){ if(cur&&m-cur.last<=3){cur.last=m;cur.b.push(avg)} else {if(cur)runs.push(cur);cur={first:m,last:m,b:[avg]}} } }
  if(cur)runs.push(cur);
- const logged=allWorkouts();
+ const logged=allWorkouts().concat(S.active?[{start:S.active.start,end:Date.now()}]:[]);
  const sessions=runs.filter(r=>r.last-r.first>=9).map(r=>{const avg=r.b.reduce((a,b)=>a+b,0)/r.b.length;const start=r.first*60e3,end=(r.last+1)*60e3;return{start,end,min:(end-start)/60e3,avg:Math.round(avg),peak:Math.round(Math.max(...r.b)),kcal:Math.round(r.b.reduce((a,b)=>a+kcalPerMin(b),0)+(r.last-r.first+1-r.b.length)*kcalPerMin(avg))}})
   .filter(s=>!logged.some(w=>w.start<s.end&&w.end>s.start)&&!S.dismissed.includes(Math.round(s.start/60e3)));
  const lastS=hr[hr.length-1]; let live=null;
@@ -369,21 +405,28 @@ const foodsOn=k=>S.foods.filter(f=>f.date===k);
 const sumF=(arr,k)=>arr.reduce((a,b)=>a+(+b[k]||0),0);
 
 /* ============ Charts ============ */
-function hrChart(hr,sessions,th){
- const W=520,Hh=150,pl=4,pr=30,pt=10,pb=20; if(!hr.length) return '<div class="empty small">No heart-rate data yet</div>';
- const t0=sod(new Date()).getTime(),t1=Date.now(); const pts=hr.filter(x=>x.t>=t0); if(pts.length<2) return '<div class="empty small">No heart-rate data today yet</div>';
- const step=Math.max(1,Math.floor(pts.length/260)); const ds=[];for(let i=0;i<pts.length;i+=step){const sl=pts.slice(i,i+step);ds.push({t:sl[0].t,bpm:sl.reduce((a,b)=>a+b.bpm,0)/sl.length})}
- const lo=Math.min(45,...ds.map(d=>d.bpm))-5, hi=Math.max(th+15,...ds.map(d=>d.bpm))+5;
- const x=t=>pl+(t-t0)/(Math.max(t1,t0+6*3600e3)-t0)*(W-pl-pr), y=b=>pt+(1-(b-lo)/(hi-lo))*(Hh-pt-pb);
+function hrChart(hr,sessions,th,T0,T1,Hh=150){
+ const W=520,pl=4,pr=30,pt=10,pb=20; if(!hr.length) return '<div class="empty small">No heart-rate data yet</div>';
+ const t0=T0||sod(new Date()).getTime(),t1=T1||Date.now(),tEnd=T1?t1:Math.max(t1,t0+6*3600e3); const pts=hr.filter(x=>x.t>=t0&&x.t<=t1); if(pts.length<2) return '<div class="empty small">No heart-rate data for this period yet</div>';
+ const step=Math.max(1,Math.floor(pts.length/300)); const ds=[];for(let i=0;i<pts.length;i+=step){const sl=pts.slice(i,i+step);ds.push({t:sl[0].t,bpm:sl.reduce((a,b)=>a+b.bpm,0)/sl.length})}
+ const lo=Math.min(45,...ds.map(d=>d.bpm))-5, hi=Math.max((th||0)+15,...ds.map(d=>d.bpm))+5;
+ const x=t=>pl+(t-t0)/(tEnd-t0)*(W-pl-pr), y=b=>pt+(1-(b-lo)/(hi-lo))*(Hh-pt-pb);
+ // one path per run of same zone, so the line changes colour with your heart rate
+ let segs='',cur=null,path='';
+ ds.forEach((d,i)=>{const z=zoneIdx(d.bpm),P=x(d.t).toFixed(1)+','+y(d.bpm).toFixed(1);
+  if(z!==cur){ if(path) segs+=`<path d="${path}L${P}" fill="none" stroke="${ZONES[cur].c}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`; cur=z; path='M'+P } else path+='L'+P });
+ if(path) segs+=`<path d="${path}" fill="none" stroke="${ZONES[cur].c}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
  const line=ds.map((d,i)=>(i?'L':'M')+x(d.t).toFixed(1)+','+y(d.bpm).toFixed(1)).join('');
  const area=line+`L${x(ds[ds.length-1].t).toFixed(1)},${Hh-pb}L${x(ds[0].t).toFixed(1)},${Hh-pb}Z`;
- const bands=sessions.filter(s=>s.end>t0).map(s=>`<rect x="${x(Math.max(s.start,t0))}" y="${pt}" width="${Math.max(2,x(s.end)-x(Math.max(s.start,t0)))}" height="${Hh-pt-pb}" fill="rgba(197,242,90,.10)" rx="4"/>`).join('');
- let ticks='';for(let h=0;h<=24;h+=6){const t=t0+h*3600e3;if(t<=Math.max(t1,t0+6*3600e3))ticks+=`<text x="${x(t)}" y="${Hh-4}" text-anchor="${h?'middle':'start'}">${h===0?'12a':h===12?'12p':h>12?(h-12)+'p':h+'a'}</text>`}
- const yt=[Math.round(lo+10),Math.round(th),Math.round(hi-5)].map(v=>`<text x="${W-2}" y="${y(v)+3}" text-anchor="end">${v}</text>`).join('');
- return `<svg class="chart" viewBox="0 0 ${W} ${Hh}" width="100%" preserveAspectRatio="none" style="display:block;height:150px">
-  <defs><linearGradient id="hg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FF6B57" stop-opacity=".35"/><stop offset="1" stop-color="#FF6B57" stop-opacity="0"/></linearGradient></defs>
-  ${bands}<line x1="${pl}" x2="${W-pr}" y1="${y(th)}" y2="${y(th)}" stroke="rgba(255,255,255,.18)" stroke-dasharray="3 4"/>
-  <path d="${area}" fill="url(#hg)"/><path d="${line}" fill="none" stroke="#FF6B57" stroke-width="1.8" stroke-linejoin="round"/>${ticks}${yt}</svg>`;
+ const bands=(sessions||[]).filter(s=>s.end>t0&&s.start<t1).map(s=>`<rect x="${x(Math.max(s.start,t0))}" y="${pt}" width="${Math.max(2,x(Math.min(s.end,t1))-x(Math.max(s.start,t0)))}" height="${Hh-pt-pb}" fill="rgba(255,255,255,.05)" rx="4"/>`).join('');
+ const zl=ZONES.slice(0,-1).map(z=>Math.round(z.hi*maxHR())).filter(v=>v>lo&&v<hi).map(v=>`<line x1="${pl}" x2="${W-pr}" y1="${y(v)}" y2="${y(v)}" stroke="${zoneOf(v+1).c}" stroke-opacity=".22" stroke-dasharray="2 5"/>`).join('');
+ let ticks='';
+ if(T1){[t0,t0+(t1-t0)/2,t1].forEach((t,i)=>ticks+=`<text x="${x(t)}" y="${Hh-4}" text-anchor="${['start','middle','end'][i]}" ${i===2?`dx="-${pr-4}"`:''}>${fmtT(t)}</text>`)}
+ else for(let h=0;h<=24;h+=6){const t=t0+h*3600e3;if(t<=tEnd)ticks+=`<text x="${x(t)}" y="${Hh-4}" text-anchor="${h?'middle':'start'}">${h===0?'12a':h===12?'12p':h>12?(h-12)+'p':h+'a'}</text>`}
+ const yt=[Math.round(lo+10),Math.round(hi-5)].map(v=>`<text x="${W-2}" y="${y(v)+3}" text-anchor="end">${v}</text>`).join('');
+ return `<svg class="chart" viewBox="0 0 ${W} ${Hh}" width="100%" preserveAspectRatio="none" style="display:block;height:${Hh}px">
+  <defs><linearGradient id="hg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".10"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></linearGradient></defs>
+  ${bands}${zl}<path d="${area}" fill="url(#hg)"/>${segs}${ticks}${yt}</svg>`;
 }
 function barChart(vals,labels,goal,color){
  const W=520,Hh=120,pb=20,max=Math.max(goal||0,...vals,1)*1.08,bw=(W/vals.length)*.56;
@@ -431,7 +474,10 @@ function vToday(){
  const lastHR=(h.hr||[]).length?h.hr[h.hr.length-1]:null;
  const greet=(()=>{const hh=new Date().getHours();return hh<12?'Good morning':hh<17?'Good afternoon':'Good evening'})();
  let html=header(`${greet}${s.name?', '+esc(s.name):''}`);
- if(live){const m=Math.round((Date.now()-live.start)/60e3);
+ if(S.active){const A=S.active,lb=A.samples.length?A.samples[A.samples.length-1][1]:null;
+  html+=`<div class="alert liveCard" data-a="resume"><div class="ic pulse" style="background:rgba(255,77,94,.16)">${ico(typeIcon(A.type),'#FF4D5E')}</div><div style="flex:1"><div class="t">${esc(typeName(A.type))} in progress</div><div class="d">Started ${fmtT(A.start)}${lb?` · ${lb} bpm`:''}</div><button class="btn sm primary" data-a="resume">Open workout screen</button></div></div>`}
+ else html+=`<button class="btn primary block" data-a="startw" style="margin-bottom:12px">${ico('play','#11140A')} Start workout</button>`;
+ if(live&&!S.active){const m=Math.round((Date.now()-live.start)/60e3);
   html+=`<div class="alert live"><div class="ic pulse">${ico('heart','#FF6B57')}</div><div style="flex:1"><div class="t">Looks like you're working out</div><div class="d">Heart rate elevated for ${m} min · now ${live.bpm} bpm</div>
   <div class="row" style="gap:8px"><button class="btn sm primary" data-a="logdet" data-s="${live.start}" data-e="${Date.now()}">Log as workout</button><button class="btn sm ghost" data-a="tab" data-t="workouts">Later</button></div></div></div>`}
  sessions.slice(-2).reverse().forEach(x=>{
@@ -442,10 +488,10 @@ function vToday(){
   <div class="ministats">
    <div class="ms"><i style="background:var(--fd-d)">${ico('flame','#F5B84A')}</i><div><div class="v num">${fmtN(actK)}</div><div class="l">active kcal</div></div></div>
    <div class="ms"><i style="background:var(--acc-d)">${ico('timer','#C5F25A')}</i><div><div class="v num">${Math.round(exMin)} min</div><div class="l">exercise · ${wToday.length} workout${wToday.length===1?'':'s'}</div></div></div>
-   <div class="ms"><i style="background:var(--hr-d)">${ico('heart','#FF6B57')}</i><div><div class="v num">${lastHR?lastHR.bpm:'—'} <span class="muted small" style="font-weight:500">bpm</span></div><div class="l">resting ${restHR()} · zone ≥ ${th}</div></div></div>
+   <div class="ms"><i style="background:var(--hr-d)">${ico('heart','#FF6B57')}</i><div><div class="v num" style="color:${lastHR?zoneOf(lastHR.bpm).c:'inherit'}">${lastHR?lastHR.bpm:'—'} <span class="muted small" style="font-weight:500">bpm</span></div><div class="l">${lastHR?zoneOf(lastHR.bpm).n+' · ':''}resting ${restHR()}</div></div></div>
   </div></div></div>`;
  html+=`<div class="card"><h3>Heart rate today <span class="pill hr">${lastHR?'Last '+fmtT(lastHR.t):'—'}</span></h3>${hrChart(h.hr||[],[...sessions,...allWorkouts()],th)}
-  <div class="tiny muted" style="margin-top:8px">Dashed line = workout zone. Green bands = workouts (logged or detected).</div></div>`;
+  ${zoneLegend()}<div class="tiny muted" style="margin-top:6px">Line colour = heart-rate zone (% of your max ${maxHR()} bpm). Shaded = workouts.</div></div>`;
  const net=eaten-actK;
  html+=`<div class="grid2">
   <div class="card" style="margin:0" data-a="tab" data-t="food"><h3>Food</h3><div class="stat"><div class="v num">${fmtN(eaten)}<small>/ ${fmtN(s.kcalGoal)}</small></div><div class="l">kcal eaten</div></div><div class="bar" style="margin-top:10px"><i style="width:${Math.min(100,eaten/s.kcalGoal*100)}%;background:var(--fd)"></i></div></div>
@@ -460,13 +506,13 @@ function vToday(){
 function workoutList(ws,del){
  if(!ws.length) return `<div class="empty">${ico('run')}<div>No workouts yet</div></div>`;
  return '<div class="list">'+ws.map(w=>{const m=(w.end-w.start)/60e3;const src=w.local?(w.synced?'<span class="pill acc">Synced</span>':'<span class="pill">Manual</span>'):(w.source==='fitbit'?'<span class="pill sl">Fitbit</span>':'<span class="pill sl">Google Health</span>');
-  return `<div class="li"><div class="ic">${ico(typeIcon(w.type),'#C5F25A')}</div><div class="m"><div class="t">${esc(w.name||typeName(w.type))}</div><div class="s">${fmtD(w.start)} · ${fmtT(w.start)} · ${dur(m)}${w.distanceKm?` · ${w.distanceKm.toFixed(1)} km`:''}</div><div style="margin-top:4px">${src}</div></div><div class="r num">${w.kcal?fmtN(w.kcal):'—'}<small>kcal</small></div>${del&&w.local?`<button class="del" data-a="delw" data-id="${w.id}">${ico('trash')}</button>`:''}</div>`}).join('')+'</div>';
+  return `<div class="li" ${w.local&&w.hr?`data-a="wdetail" data-id="${w.id}" style="cursor:pointer"`:''}><div class="ic">${ico(typeIcon(w.type),'#C5F25A')}</div><div class="m"><div class="t">${esc(w.name||typeName(w.type))}</div><div class="s">${fmtD(w.start)} · ${fmtT(w.start)} · ${dur(m)}${w.distanceKm?` · ${w.distanceKm.toFixed(1)} km`:''}</div><div style="margin-top:4px">${src}${w.hr?' <span class="pill hr">Live HR</span>':''}</div></div><div class="r num">${w.kcal?fmtN(w.kcal):'—'}<small>kcal</small></div>${del&&w.local?`<button class="del" data-a="delw" data-id="${w.id}">${ico('trash')}</button>`:''}</div>`}).join('')+'</div>';
 }
 function vWorkouts(){
  const ws=allWorkouts(), wk=ws.filter(w=>w.start>=addDays(sod(new Date()),-6).getTime());
  let html=header('Workouts');
  html+=`<div class="card"><div class="grid3"><div class="stat"><div class="v num">${wk.length}</div><div class="l">this week</div></div><div class="stat"><div class="v num">${Math.round(wk.reduce((a,w)=>a+(w.end-w.start)/60e3,0))}<small>min</small></div><div class="l">active time</div></div><div class="stat"><div class="v num">${fmtN(sumF(wk,'kcal'))}</div><div class="l">kcal burned</div></div></div></div>`;
- html+=`<button class="btn primary block" data-a="logw" style="margin-bottom:6px">${ico('plus','#11140A')} Log workout</button>`;
+ html+=S.active?`<button class="btn primary block" data-a="resume" style="margin-bottom:6px">${ico('heart','#11140A')} Workout in progress — open</button>`:`<div class="grid2" style="margin-bottom:6px"><button class="btn primary" data-a="startw">${ico('play','#11140A')} Start workout</button><button class="btn" data-a="logw">${ico('plus')} Log past workout</button></div>`;
  const {sessions}=detectSessions();
  if(sessions.length) html+=`<div class="dayh">Detected — not logged</div><div class="card">`+'<div class="list">'+sessions.slice().reverse().map(x=>`<div class="li"><div class="ic">${ico('bolt','#C5F25A')}</div><div class="m"><div class="t">${dayLabel(dkey(x.start))}, ${fmtT(x.start)}</div><div class="s">${dur(x.min)} · avg ${x.avg} bpm · ~${x.kcal} kcal</div></div><button class="btn sm primary" data-a="logdet" data-s="${x.start}" data-e="${x.end}" data-k="${x.kcal}">Log</button></div>`).join('')+'</div></div>';
  const groups={};ws.forEach(w=>{const k=dkey(w.start);(groups[k]=groups[k]||[]).push(w)});
@@ -673,6 +719,116 @@ function sheetSettings(){
  });
 }
 
+/* ============ Live workout ============ */
+// Live heart rate comes from the Fitbit Air over Bluetooth (standard Heart Rate profile, via "Share heart rate"
+// in the Google Health app). Without Bluetooth it falls back to Google Health sync, which lags by minutes.
+let ble=null, liveBpm=null, liveAt=0, wakeLock=null, liveTick=null, apiPoll=null, shiftTick=null, lastSave=0;
+const hasBT=()=>!!(navigator.bluetooth&&navigator.bluetooth.requestDevice);
+async function connectHR(){
+ if(!hasBT()) throw new Error('Live Bluetooth heart rate needs Chrome on Android');
+ const dev=await navigator.bluetooth.requestDevice({filters:[{services:['heart_rate']}]});
+ dev.addEventListener('gattserverdisconnected',()=>{ if(ble&&ble.dev===dev){ble.connected=false;updateLive();setTimeout(()=>reconnectHR(dev,1),1500)} });
+ await attachHR(dev); return dev;
+}
+async function attachHR(dev){
+ const srv=await dev.gatt.connect(); const svc=await srv.getPrimaryService('heart_rate'); const ch=await svc.getCharacteristic('heart_rate_measurement');
+ ch.addEventListener('characteristicvaluechanged',e=>{const v=e.target.value,f=v.getUint8(0);onHR(f&1?v.getUint16(1,true):v.getUint8(1))});
+ await ch.startNotifications(); ble={dev,connected:true,name:dev.name||'Heart rate'}; updateLive();
+}
+async function reconnectHR(dev,n){ if(!S.active||!ble||ble.connected||n>8) return; try{await attachHR(dev);toast('Heart rate reconnected')}catch(e){setTimeout(()=>reconnectHR(dev,n+1),3000)} }
+function onHR(bpm){
+ if(!bpm||bpm<25||bpm>240) return; liveBpm=bpm; liveAt=Date.now();
+ if(S.active){const A=S.active,last=A.samples[A.samples.length-1]; if(!last||liveAt-last[0]>=1000) A.samples.push([liveAt,bpm]); if(liveAt-lastSave>15000){lastSave=liveAt;save()}}
+ updateLive();
+}
+async function keepAwake(){ try{ if('wakeLock' in navigator){ wakeLock=await navigator.wakeLock.request('screen'); } }catch(e){} }
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden&&S.active&&$('#live').classList.contains('on')) keepAwake() });
+function sheetStart(){
+ openSheet(`<h2>Start workout</h2>
+ <label class="f"><span>Activity</span>${chipGroup('type',TYPES.map(t=>[t[0],t[1],t[2]]),'SOCCER')}</label>
+ <div class="note"><b>Live heart rate:</b> in the Google Health app go to <b>Connections → Fitbit Air → Share heart rate</b> (turn on <b>Always visible</b> to skip this next time). Then tap the button below and pick your Fitbit Air.</div>
+ ${hasBT()?`<button class="btn primary block" id="stBT">${ico('bt','#11140A')} Connect Fitbit Air &amp; start</button><div style="height:8px"></div>`:'<div class="note">This browser can\'t use Bluetooth. Use Chrome on Android for live heart rate.</div>'}
+ <button class="btn ghost block" id="stNo">Start without live heart rate</button>
+ <div class="tiny muted" style="margin-top:10px">Without Bluetooth, heart rate updates from Google Health every minute or so and can lag behind.</div>`,root=>{wireChips(root);
+  const type=()=>root.querySelector('[data-g=type]').dataset.val;
+  const bt=root.querySelector('#stBT'); if(bt) bt.onclick=async()=>{bt.disabled=true;bt.textContent='Pick your Fitbit Air…';try{await connectHR();startLive(type())}catch(e){bt.disabled=false;bt.innerHTML=ico('bt','#11140A')+' Connect Fitbit Air &amp; start';if(e.name!=='NotFoundError')toast(e.message);else toast('No device picked — is Share heart rate on?')}};
+  root.querySelector('#stNo').onclick=()=>startLive(type());
+ });
+}
+function startLive(type){
+ S.active={id:uid(),type,start:Date.now(),samples:[]}; save(); closeSheet(); openLive(); render();
+}
+function openLive(){
+ if(!S.active) return; const L=$('#live'); L.classList.add('on'); L.classList.remove('dim'); keepAwake();
+ L.innerHTML=`<div class="lt"><div><b>${esc(typeName(S.active.type))}</b><div class="hrsrc" id="lsrc"></div></div><div class="timer num" id="ltime">0:00</div></div>
+ <div class="center" id="lcenter"><div class="bpm" id="lbpm">--</div><div class="zname" id="lzone">Waiting for heart rate…</div><div class="zbar" id="lzbar">${ZONES.map(z=>`<i style="background:${z.c}"></i>`).join('')}</div></div>
+ <div class="hint">Tap the screen to dim · keeps the screen on</div>
+ <div class="lstats"><div><div class="v num" id="lavg">--</div><div class="l">avg bpm</div></div><div><div class="v num" id="lmax">--</div><div class="l">max bpm</div></div><div><div class="v num" id="lkcal">0</div><div class="l">kcal</div></div></div>
+ <div class="lbtns">${ble&&ble.connected?'':(hasBT()?`<button class="btn ghost" id="lbt">${ico('bt')} Connect HR</button>`:'')}<button class="btn" id="lmin">Minimize</button><button class="btn danger" id="lend">End</button></div>`;
+ L.querySelector('#lcenter').onclick=()=>L.classList.toggle('dim');
+ L.querySelector('.hint').onclick=()=>L.classList.toggle('dim');
+ L.querySelector('#lmin').onclick=()=>{L.classList.remove('on');render()};
+ L.querySelector('#lend').onclick=endLiveConfirm;
+ const lb=L.querySelector('#lbt'); if(lb) lb.onclick=async()=>{try{await connectHR();lb.remove()}catch(e){if(e.name!=='NotFoundError')toast(e.message)}};
+ clearInterval(liveTick); liveTick=setInterval(updateLive,1000);
+ clearInterval(apiPoll); apiPoll=setInterval(pollApiHR,60000); pollApiHR();
+ clearInterval(shiftTick); shiftTick=setInterval(()=>{const c=$('#lcenter');if(c&&$('#live').classList.contains('dim'))c.style.transform=`translate(${(Math.random()*30-15).toFixed(0)}px,${(Math.random()*60-30).toFixed(0)}px)`;else if(c)c.style.transform=''},45000);
+ updateLive();
+}
+async function pollApiHR(){
+ if(!S.active||(ble&&ble.connected)||S.settings.demo||!S.settings.connected||!token||Date.now()>tokenExp) return;
+ try{const pts=await listAll('heart-rate',`heart_rate.sample_time.physical_time >= "${new Date(S.active.start).toISOString()}"`,20000);
+  const arr=pts.map(p=>[Date.parse(p.heartRate.sampleTime.physicalTime),+p.heartRate.beatsPerMinute]).filter(x=>x[0]&&x[1]).sort((a,b)=>a[0]-b[0]);
+  if(arr.length){S.active.samples=arr;const l=arr[arr.length-1];liveBpm=l[1];liveAt=l[0];save();updateLive()}}catch(e){}
+}
+function liveStats(A,endT){
+ const sm=A.samples; let kcal=0,secs=new Array(ZONES.length).fill(0);
+ for(let i=0;i<sm.length;i++){const dt=Math.min(120,((i+1<sm.length?sm[i+1][0]:Math.min(endT,sm[i][0]+5000))-sm[i][0])/1000);kcal+=kcalPerMin(sm[i][1])*dt/60;secs[zoneIdx(sm[i][1])]+=dt}
+ const b=sm.map(x=>x[1]),avg=b.length?Math.round(b.reduce((a,c)=>a+c,0)/b.length):null,mins=(endT-A.start)/60e3,cov=secs.reduce((a,c)=>a+c,0)/60/Math.max(1,mins);
+ if(avg&&cov<.6) kcal=Math.max(kcal,kcalPerMin(avg)*mins); // gaps in the data: estimate from average HR over the whole session
+ return {avg,max:b.length?Math.max(...b):null,kcal:Math.round(kcal),secs};
+}
+function updateLive(){
+ const L=$('#live'); if(!S.active||!L.classList.contains('on')) return; const A=S.active;
+ const el=Math.floor((Date.now()-A.start)/1000); $('#ltime').textContent=el>=3600?`${Math.floor(el/3600)}:${pad(Math.floor(el%3600/60))}:${pad(el%60)}`:`${Math.floor(el/60)}:${pad(el%60)}`;
+ const fresh=liveBpm&&Date.now()-liveAt<(ble&&ble.connected?15000:10*60e3);
+ const bpmEl=$('#lbpm'),zEl=$('#lzone');
+ if(fresh){const zi=zoneIdx(liveBpm),z=ZONES[zi];bpmEl.textContent=liveBpm;bpmEl.style.color=z.c;zEl.textContent=z.n;zEl.style.color=z.c;[...$('#lzbar').children].forEach((c,i)=>c.classList.toggle('on',i===zi))}
+ else{bpmEl.textContent='--';bpmEl.style.color='#5E6570';zEl.style.color='#8B929D';zEl.textContent=ble&&!ble.connected?'Reconnecting…':(ble?'Waiting for heart rate…':'No live heart rate')}
+ const st=liveStats(A,Date.now()); $('#lavg').textContent=st.avg||'--'; $('#lmax').textContent=st.max||'--';
+ $('#lkcal').textContent=st.kcal||Math.round((Date.now()-A.start)/60e3*7*latestWeightKg()/70);
+ $('#lsrc').innerHTML=ble&&ble.connected?`<span class="dot ok"></span>Live · ${esc(ble.name)}`:ble?'<span class="dot err pulse"></span>Bluetooth lost':`<span class="dot"></span>${liveBpm?'Google Health (delayed '+Math.max(0,Math.round((Date.now()-liveAt)/60e3))+' min)':'Google Health sync'}`;
+}
+function endLiveConfirm(){
+ const A=S.active; const st=liveStats(A,Date.now()); const m=(Date.now()-A.start)/60e3;
+ openSheet(`<h2>End ${esc(typeName(A.type))}?</h2><div class="grid3" style="margin-bottom:16px"><div class="stat"><div class="v num">${dur(m)}</div><div class="l">time</div></div><div class="stat"><div class="v num">${st.avg||'--'}</div><div class="l">avg bpm</div></div><div class="stat"><div class="v num">${st.kcal||'--'}</div><div class="l">kcal</div></div></div>
+ <div class="toggle"><div class="k">Save to Google Health<small>${canSync()?'Shows in your Google Health app':'Connect Google Health in Settings to enable'}</small></div><div class="sw ${canSync()?'on':''}" id="esync"></div></div>
+ <div class="row" style="gap:8px"><button class="btn ghost" style="flex:1" data-close>Keep going</button><button class="btn danger" style="flex:1" id="discard">Discard</button><button class="btn primary" style="flex:1" id="fin">Save</button></div>`,root=>{wireToggles(root);
+  root.querySelector('[data-close]').onclick=closeSheet;
+  root.querySelector('#discard').onclick=()=>{stopLive();S.active=null;save();closeSheet();render();toast('Workout discarded')};
+  root.querySelector('#fin').onclick=()=>finishLive(root.querySelector('#esync').classList.contains('on'));
+ });
+ $('#sheet').style.zIndex=80;$('#scrim').style.zIndex=79;
+}
+function stopLive(){ clearInterval(liveTick);clearInterval(apiPoll);clearInterval(shiftTick); try{wakeLock&&wakeLock.release()}catch(e){} wakeLock=null;
+ try{ble&&ble.dev.gatt.connected&&ble.dev.gatt.disconnect()}catch(e){} ble=null; liveBpm=null; $('#live').classList.remove('on','dim'); $('#sheet').style.zIndex='';$('#scrim').style.zIndex=''; }
+async function finishLive(sync){
+ const A=S.active,end=Date.now(),st=liveStats(A,end),m=(end-A.start)/60e3;
+ const ds=[];let lt=0;A.samples.forEach(x=>{if(x[0]-lt>=5000){ds.push(x);lt=x[0]}}); // keep a sample every 5 s
+ const w={id:A.id,type:A.type,name:'',start:A.start,end,kcal:st.kcal||Math.round(m*7*latestWeightKg()/70),avgHR:st.avg,maxHR:st.max,zoneSecs:st.secs,hr:ds.length?ds:null,live:true};
+ stopLive(); S.active=null; S.workouts.push(w); save(); closeSheet(); tab='workouts'; render(); toast('Workout saved');
+ if(sync&&canSync()){try{if(await ensureToken()){const n=await pushWorkout(w);w.synced=true;if(typeof n==='string')w.remote=n;save();render();toast('Saved to Google Health')}}catch(err){toast('Google Health: '+err.message)}}
+ sheetWorkoutDetail(w);
+}
+function sheetWorkoutDetail(w){
+ const hr=(w.hr||[]).map(x=>({t:x[0],bpm:x[1]})), tot=(w.zoneSecs||[]).reduce((a,b)=>a+b,0)||1;
+ openSheet(`<h2>${esc(w.name||typeName(w.type))}</h2><div class="small muted" style="margin:-10px 0 14px">${fmtD(w.start)} · ${fmtT(w.start)}–${fmtT(w.end)}</div>
+ <div class="grid3" style="margin-bottom:14px"><div class="stat"><div class="v num">${dur((w.end-w.start)/60e3)}</div><div class="l">time</div></div><div class="stat"><div class="v num" style="color:${w.avgHR?zoneOf(w.avgHR).c:'inherit'}">${w.avgHR||'--'}</div><div class="l">avg bpm · max ${w.maxHR||'--'}</div></div><div class="stat"><div class="v num">${fmtN(w.kcal)}</div><div class="l">kcal</div></div></div>
+ ${hr.length>1?hrChart(hr,[],0,w.start,w.end,140):''}
+ ${w.zoneSecs?`<div class="sec">Time in zones</div>`+ZONES.map((z,i)=>w.zoneSecs[i]>=1?`<div class="row" style="gap:10px;margin-bottom:8px"><span class="small" style="width:66px;color:${z.c}">${z.n}</span><div class="bar" style="flex:1"><i style="width:${w.zoneSecs[i]/tot*100}%;background:${z.c}"></i></div><span class="small muted num" style="width:52px;text-align:right">${Math.round(w.zoneSecs[i]/60)} min</span></div>`:'').join(''):''}
+ <div style="height:12px"></div><button class="btn block" data-close>Close</button>`,r=>r.querySelector('[data-close]').onclick=closeSheet);
+}
+
 /* ============ Render & events ============ */
 const TABS=[['today','Today','home'],['workouts','Workouts','run'],['food','Food','food'],['weight','Weight','scale'],['coach','Coach','coach']];
 function render(){
@@ -700,6 +856,9 @@ document.addEventListener('click',e=>{
  else if(a==='ask') sendAsk(el.dataset.q);
  else if(a==='clearchat'){S.chat=[];save();render()}
  else if(a==='sleep') sheetSleep();
+ else if(a==='startw') sheetStart();
+ else if(a==='resume') openLive();
+ else if(a==='wdetail'){const w=S.workouts.find(x=>x.id===el.dataset.id);if(w)sheetWorkoutDetail(w)}
 });
 $('#scrim').addEventListener('click',closeSheet);
 window.addEventListener('hashchange',()=>{const t=location.hash.slice(1);if(TABS.some(x=>x[0]===t))go(t)});
@@ -709,6 +868,7 @@ render();
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!S.settings.demo&&S.settings.connected&&(!S.lastSync||Date.now()-S.lastSync>3*60e3))syncHealth()});
 setInterval(()=>{if(!document.hidden){if(!S.settings.demo&&S.settings.connected)syncHealth();else if(tab==='today')render()}},5*60e3);
 if(!S.settings.demo&&S.settings.connected&&token) syncHealth();
+if(S.active) openLive();
 try{if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(()=>{})}catch(e){}
 </script>
 </body>
