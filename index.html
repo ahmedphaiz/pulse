@@ -219,11 +219,12 @@ function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clea
 
 /* ============ State ============ */
 const KEY='pulse.v1';
-const DEF={settings:{clientId:'',apiKey:'',model:'claude-haiku-5-5',stepGoal:10000,kcalGoal:2200,proteinGoal:140,unit:'kg',age:30,sex:'male',heightCm:175,goalWeight:'',demo:true,name:''},
+const DEF={settings:{clientId:'436074854426-64al3shcs4mhmn5k17qms04lr542fid2.apps.googleusercontent.com',apiKey:'',model:'claude-haiku-5-5',stepGoal:10000,kcalGoal:2200,proteinGoal:140,unit:'kg',age:30,sex:'male',heightCm:175,goalWeight:'',demo:true,name:''},
  workouts:[],foods:[],weights:[],chat:[],dismissed:[],health:null,lastSync:null};
 let S;
 try{S=JSON.parse(localStorage.getItem(KEY))||{}}catch(e){S={}}
 S=Object.assign(structuredClone(DEF),S);S.settings=Object.assign(structuredClone(DEF.settings),S.settings||{});
+if(!S.settings.clientId)S.settings.clientId=DEF.settings.clientId;
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 let token=null, tokenExp=0, tab='today', foodDay=dkey(new Date()), weightRange=30, syncing=false, syncErrors=[];
 try{const t=JSON.parse(sessionStorage.getItem('pulse.tok')||'null');if(t&&t.exp>Date.now()){token=t.token;tokenExp=t.exp}}catch(e){}
@@ -257,7 +258,7 @@ function demoHealth(){
 function H(){ if(S.settings.demo) { if(!H._d||Date.now()-H._d.fetched>60e3) H._d=demoHealth(); return H._d } return S.health||{hr:[],steps7:[],exercises:[],sleep:null,restingHR:null,weights:[]} }
 
 /* ============ Google Health API ============ */
-const SCOPES=['activity_and_fitness','health_metrics_and_measurements','sleep','nutrition'].map(s=>'https://www.googleapis.com/auth/googlehealth.'+s).join(' ');
+const SCOPES=['activity_and_fitness.readonly','activity_and_fitness.writeonly','health_metrics_and_measurements.readonly','health_metrics_and_measurements.writeonly','sleep.readonly'].map(s=>'https://www.googleapis.com/auth/googlehealth.'+s).join(' ');
 const API='https://health.googleapis.com/v4/users/me/';
 let gisLoaded=null;
 function loadGIS(){ if(gisLoaded) return gisLoaded; gisLoaded=new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://accounts.google.com/gsi/client';s.onload=res;s.onerror=()=>{gisLoaded=null;rej(new Error('Could not load Google sign-in (are you offline, or inside a preview frame?)'))};document.head.appendChild(s)}); return gisLoaded }
