@@ -617,7 +617,7 @@ function vCoach(){
   ${S.settings.apiKey?'':'<div class="note">Add an AI key in <span class="link" data-a="settings">Settings</span> for full conversations. Without one you get quick automatic insights.</div>'}
   <div class="chips">${['How was my week?','What should I train today?','Am I recovering well?','Review my eating today','Help me hit my goal weight'].map(q=>`<button class="chip" data-a="ask" data-q="${esc(q)}">${q}</button>`).join('')}</div></div>`;
  } else html+=`<div class="between" style="margin:-6px 0 12px"><span class="tiny muted">Coach advice is general fitness guidance, not medical advice.</span><button class="link" data-a="clearchat">Clear</button></div>`;
- html+='<div class="chat" id="chat">'+S.chat.map(m=>`<div class="msg ${m.role==='user'?'u':'a'}">${m.role==='user'?esc(m.content):mdLite(m.content)}</div>`).join('')+(coachBusy?'<div class="msg a typing"><span></span><span></span><span></span></div>':'')+'</div><div style="height:70px"></div>';
+ html+='<div class="chat" id="chat">'+S.chat.map(m=>m.role!=='user'&&!m.content?'<div class="msg a typing"><span></span><span></span><span></span></div>':`<div class="msg ${m.role==='user'?'u':'a'}">${m.role==='user'?esc(m.content):mdLite(m.content)}</div>`).join('')+(coachBusy&&S.chat.length&&S.chat[S.chat.length-1].role==='user'?'<div class="msg a typing"><span></span><span></span><span></span></div>':'')+'</div><div style="height:70px"></div>';
  html+=`<div class="composer"><form class="in" id="askf"><input class="inp" id="askq" placeholder="Ask your coach…" autocomplete="off"><button class="sendbtn" type="submit">${ico('send')}</button></form></div>`;
  return html;
 }
@@ -640,7 +640,18 @@ Food last 7 days: ${food7.join('; ')}
 Today's food items: ${foodsOn(today).map(f=>`${f.meal}: ${f.name} ${f.kcal}kcal`).join('; ')||'none'}
 Weight log: ${wts.join('; ')||'none'}`;
 }
-const SYS=`You are Pulse Coach, a friendly, direct personal fitness coach inside the user's fitness tracker app. You have the user's live data below. Ground every answer in their numbers (cite them briefly). Be concise: short paragraphs or a few bullets, phone-screen friendly, under ~170 words unless asked for a plan. Give concrete, actionable suggestions (sets/reps, durations, targets). Note that you're not a doctor when health concerns come up and suggest seeing one for pain, chest symptoms, dizziness or anything worrying. Never encourage extreme dieting or overtraining.`;
+const SYS=`You are Pulse Coach, a friendly, direct personal fitness coach inside the user's fitness tracker app. You have the user's live data below. Ground every answer in their numbers (cite them briefly). Keep replies short and phone-friendly: 2-5 sentences or up to 5 bullets, under 110 words. Only go longer when the user asks for a plan or more detail. Give concrete, actionable suggestions (sets/reps, durations, targets). Note that you're not a doctor when health concerns come up and suggest seeing one for pain, chest symptoms, dizziness or anything worrying. Never encourage extreme dieting or overtraining.`;
+async function streamClaude(messages,system,maxTokens,onText){
+ const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'content-type':'application/json','x-api-key':S.settings.apiKey.trim(),'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+  body:JSON.stringify({model:S.settings.model||'claude-haiku-5-5',max_tokens:maxTokens,system,messages,stream:true})});
+ if(!r.ok){const j=await r.json().catch(()=>({}));throw new Error((j.error&&j.error.message)||('HTTP '+r.status))}
+ const rd=r.body.getReader(),dec=new TextDecoder();let buf='',out='';
+ for(;;){const {done,value}=await rd.read();if(done)break;buf+=dec.decode(value,{stream:true});let i;
+  while((i=buf.indexOf('\n'))>=0){const line=buf.slice(0,i).trim();buf=buf.slice(i+1);if(!line.startsWith('data:'))continue;let ev;try{ev=JSON.parse(line.slice(5))}catch(e){continue}
+   if(ev.type==='content_block_delta'&&ev.delta&&ev.delta.type==='text_delta'){out+=ev.delta.text;onText(out)}
+   else if(ev.type==='error') throw new Error(ev.error&&ev.error.message||'AI error')}}
+ return out.trim();
+}
 async function askClaude(messages,system,maxTokens=700){
  const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'content-type':'application/json','x-api-key':S.settings.apiKey.trim(),'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
   body:JSON.stringify({model:S.settings.model||'claude-haiku-5-5',max_tokens:maxTokens,system,messages})});
@@ -664,9 +675,12 @@ async function sendAsk(q){
  try{
   let a;
   if(!S.settings.apiKey) a=offlineCoach();
-  else a=await askClaude(S.chat.slice(-12).map(m=>({role:m.role,content:m.content})),SYS+'\n\n<user_data>\n'+contextSummary()+'\n</user_data>');
-  S.chat.push({role:'assistant',content:a||'…'});
- }catch(e){S.chat.push({role:'assistant',content:'Couldn\'t reach the AI: '+e.message+(/fetch|network/i.test(e.message)?' (network blocked or offline).':'')})}
+  else{ // stream the reply so words appear as they arrive
+   const msgs=S.chat.slice(-10).map(m=>({role:m.role,content:m.content})), A={role:'assistant',content:''}; S.chat.push(A); render(); scrollChat();
+   let raf=0; a=await streamClaude(msgs,SYS+'\n\n<user_data>\n'+contextSummary()+'\n</user_data>',600,t=>{A.content=t;if(!raf)raf=requestAnimationFrame(()=>{raf=0;const el=[...document.querySelectorAll('#chat .msg.a')].pop();if(el){el.classList.remove('typing');el.innerHTML=mdLite(A.content)}window.scrollTo(0,document.body.scrollHeight)})});
+   A.content=a||'…'; a=null; }
+  if(a!=null) S.chat.push({role:'assistant',content:a||'…'});
+ }catch(e){const L=S.chat[S.chat.length-1];if(L&&L.role==='assistant'&&!L.content)S.chat.pop();S.chat.push({role:'assistant',content:'Couldn\'t reach the AI: '+e.message+(/fetch|network/i.test(e.message)?' (network blocked or offline).':'')})}
  coachBusy=false; save(); render(); scrollChat();
 }
 function scrollChat(){requestAnimationFrame(()=>window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'}))}
