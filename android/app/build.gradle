@@ -1,0 +1,46 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.ahmedphaiz.pulse'
+    compileSdk 36
+
+    defaultConfig {
+        applicationId 'com.ahmedphaiz.pulse'
+        minSdk 31
+        targetSdk 36
+        versionCode Integer.parseInt(System.getenv('BUILD_NUMBER') ?: '1')
+        versionName '1.0.' + (System.getenv('BUILD_NUMBER') ?: '1')
+    }
+
+    // Fixed signing key so each new build installs as an update over the old one.
+    // The key and its password come from GitHub secrets (never stored in the repo).
+    signingConfigs {
+        release {
+            storeFile file('pulse.keystore')
+            storePassword System.getenv('KEY_PASSWORD')
+            keyAlias 'pulse'
+            keyPassword System.getenv('KEY_PASSWORD')
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+        debug {
+            signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'com.google.android.gms:play-services-auth:21.3.0'
+}

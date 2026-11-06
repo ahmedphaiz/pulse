@@ -290,9 +290,16 @@ function H(){ if(S.settings.demo) { if(!H._d||Date.now()-H._d.fetched>60e3) H._d
 /* ============ Google Health API ============ */
 const SCOPES=['activity_and_fitness.readonly','activity_and_fitness.writeonly','health_metrics_and_measurements.readonly','health_metrics_and_measurements.writeonly','sleep.readonly'].map(s=>'https://www.googleapis.com/auth/googlehealth.'+s).join(' ');
 const API='https://health.googleapis.com/v4/users/me/';
+// Inside the Pulse Android app, native features are available as window.PulseNative
+const NATIVE=(()=>{try{return window.PulseNative&&PulseNative.isApp()?PulseNative:null}catch(e){return null}})();
 let gisLoaded=null;
 function loadGIS(){ if(gisLoaded) return gisLoaded; gisLoaded=new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://accounts.google.com/gsi/client';s.onload=res;s.onerror=()=>{gisLoaded=null;rej(new Error('Could not load Google sign-in (are you offline, or inside a preview frame?)'))};document.head.appendChild(s)}); return gisLoaded }
 async function connectGoogle(silent){
+ if(NATIVE) return new Promise(res=>{
+  window.onNativeToken=(t,exp)=>{token=t;tokenExp=Date.now()+(exp-60)*1000;try{sessionStorage.setItem('pulse.tok',JSON.stringify({token,exp:tokenExp}))}catch(e){}S.settings.connected=true;S.settings.demo=false;save();res(true)};
+  window.onNativeTokenError=m=>{if(!silent)toast('Google: '+m);res(false)};
+  NATIVE.signIn(SCOPES);
+ });
  if(!S.settings.clientId){toast('Add your Google OAuth Client ID first');return false}
  await loadGIS();
  return new Promise(res=>{
@@ -723,7 +730,7 @@ function sheetSettings(){
 // Live heart rate comes from the Fitbit Air over Bluetooth (standard Heart Rate profile, via "Share heart rate"
 // in the Google Health app). Without Bluetooth it falls back to Google Health sync, which lags by minutes.
 let ble=null, liveBpm=null, liveAt=0, wakeLock=null, liveTick=null, apiPoll=null, shiftTick=null, lastSave=0;
-const hasBT=()=>!!(navigator.bluetooth&&navigator.bluetooth.requestDevice);
+const hasBT=()=>!!NATIVE||!!(navigator.bluetooth&&navigator.bluetooth.requestDevice);
 async function connectHR(){
  if(!hasBT()) throw new Error('Live Bluetooth heart rate needs Chrome on Android');
  const dev=await navigator.bluetooth.requestDevice({filters:[{services:['heart_rate']}]});
@@ -741,30 +748,33 @@ function onHR(bpm){
  if(S.active){const A=S.active,last=A.samples[A.samples.length-1]; if(!last||liveAt-last[0]>=1000) A.samples.push([liveAt,bpm]); if(liveAt-lastSave>15000){lastSave=liveAt;save()}}
  updateLive();
 }
-async function keepAwake(){ try{ if('wakeLock' in navigator){ wakeLock=await navigator.wakeLock.request('screen'); } }catch(e){} }
+async function keepAwake(){ if(NATIVE){try{NATIVE.keepScreenOn(true)}catch(e){}return} try{ if('wakeLock' in navigator){ wakeLock=await navigator.wakeLock.request('screen'); } }catch(e){} }
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden&&S.active&&$('#live').classList.contains('on')) keepAwake() });
 function sheetStart(){
  openSheet(`<h2>Start workout</h2>
  <label class="f"><span>Activity</span>${chipGroup('type',TYPES.map(t=>[t[0],t[1],t[2]]),'SOCCER')}</label>
  <div class="note"><b>Live heart rate:</b> in the Google Health app go to <b>Connections → Fitbit Air → Share heart rate</b> (turn on <b>Always visible</b> to skip this next time). Then tap the button below and pick your Fitbit Air.</div>
- ${hasBT()?`<button class="btn primary block" id="stBT">${ico('bt','#11140A')} Connect Fitbit Air &amp; start</button><div style="height:8px"></div>`:'<div class="note">This browser can\'t use Bluetooth. Use Chrome on Android for live heart rate.</div>'}
+ ${NATIVE?`<button class="btn primary block" id="stBT">${ico('play','#11140A')} Start — heart rate connects automatically</button>`:hasBT()?`<button class="btn primary block" id="stBT">${ico('bt','#11140A')} Connect Fitbit Air &amp; start</button><div style="height:8px"></div>`:'<div class="note">This browser can\'t use Bluetooth. Use Chrome on Android for live heart rate.</div>'}
  <button class="btn ghost block" id="stNo">Start without live heart rate</button>
  <div class="tiny muted" style="margin-top:10px">Without Bluetooth, heart rate updates from Google Health every minute or so and can lag behind.</div>`,root=>{wireChips(root);
   const type=()=>root.querySelector('[data-g=type]').dataset.val;
-  const bt=root.querySelector('#stBT'); if(bt) bt.onclick=async()=>{bt.disabled=true;bt.textContent='Pick your Fitbit Air…';try{await connectHR();startLive(type())}catch(e){bt.disabled=false;bt.innerHTML=ico('bt','#11140A')+' Connect Fitbit Air &amp; start';if(e.name!=='NotFoundError')toast(e.message);else toast('No device picked — is Share heart rate on?')}};
+  const bt=root.querySelector('#stBT'); if(bt) bt.onclick=async()=>{if(NATIVE){startLive(type());return}bt.disabled=true;bt.textContent='Pick your Fitbit Air…';try{await connectHR();startLive(type())}catch(e){bt.disabled=false;bt.innerHTML=ico('bt','#11140A')+' Connect Fitbit Air &amp; start';if(e.name!=='NotFoundError')toast(e.message);else toast('No device picked — is Share heart rate on?')}};
   root.querySelector('#stNo').onclick=()=>startLive(type());
  });
 }
 function startLive(type){
- S.active={id:uid(),type,start:Date.now(),samples:[]}; save(); closeSheet(); openLive(); render();
+ S.active={id:uid(),type,start:Date.now(),samples:[]}; save(); closeSheet();
+ if(NATIVE){ble={connected:false,name:'Fitbit Air',msg:'Searching for Fitbit Air…'};try{NATIVE.startWorkout(type,typeName(type),maxHR(),S.active.start)}catch(e){toast(e.message)}}
+ openLive(); render();
 }
 function openLive(){
- if(!S.active) return; const L=$('#live'); L.classList.add('on'); L.classList.remove('dim'); keepAwake();
+ if(!S.active) return; const L=$('#live');
+ if(NATIVE){try{const st=JSON.parse(NATIVE.status());if(!st.running)NATIVE.startWorkout(S.active.type,typeName(S.active.type),maxHR(),S.active.start);ble={connected:!!st.connected,name:st.name||'Fitbit Air',msg:st.connected?'':'Connecting…'}}catch(e){}mergeNative()} L.classList.add('on'); L.classList.remove('dim'); keepAwake();
  L.innerHTML=`<div class="lt"><div><b>${esc(typeName(S.active.type))}</b><div class="hrsrc" id="lsrc"></div></div><div class="timer num" id="ltime">0:00</div></div>
  <div class="center" id="lcenter"><div class="bpm" id="lbpm">--</div><div class="zname" id="lzone">Waiting for heart rate…</div><div class="zbar" id="lzbar">${ZONES.map(z=>`<i style="background:${z.c}"></i>`).join('')}</div></div>
  <div class="hint">Tap the screen to dim · keeps the screen on</div>
  <div class="lstats"><div><div class="v num" id="lavg">--</div><div class="l">avg bpm</div></div><div><div class="v num" id="lmax">--</div><div class="l">max bpm</div></div><div><div class="v num" id="lkcal">0</div><div class="l">kcal</div></div></div>
- <div class="lbtns">${ble&&ble.connected?'':(hasBT()?`<button class="btn ghost" id="lbt">${ico('bt')} Connect HR</button>`:'')}<button class="btn" id="lmin">Minimize</button><button class="btn danger" id="lend">End</button></div>`;
+ <div class="lbtns">${NATIVE||(ble&&ble.connected)?'':(hasBT()?`<button class="btn ghost" id="lbt">${ico('bt')} Connect HR</button>`:'')}<button class="btn" id="lmin">Minimize</button><button class="btn danger" id="lend">End</button></div>`;
  L.querySelector('#lcenter').onclick=()=>L.classList.toggle('dim');
  L.querySelector('.hint').onclick=()=>L.classList.toggle('dim');
  L.querySelector('#lmin').onclick=()=>{L.classList.remove('on');render()};
@@ -797,7 +807,7 @@ function updateLive(){
  else{bpmEl.textContent='--';bpmEl.style.color='#5E6570';zEl.style.color='#8B929D';zEl.textContent=ble&&!ble.connected?'Reconnecting…':(ble?'Waiting for heart rate…':'No live heart rate')}
  const st=liveStats(A,Date.now()); $('#lavg').textContent=st.avg||'--'; $('#lmax').textContent=st.max||'--';
  $('#lkcal').textContent=st.kcal||Math.round((Date.now()-A.start)/60e3*7*latestWeightKg()/70);
- $('#lsrc').innerHTML=ble&&ble.connected?`<span class="dot ok"></span>Live · ${esc(ble.name)}`:ble?'<span class="dot err pulse"></span>Bluetooth lost':`<span class="dot"></span>${liveBpm?'Google Health (delayed '+Math.max(0,Math.round((Date.now()-liveAt)/60e3))+' min)':'Google Health sync'}`;
+ $('#lsrc').innerHTML=ble&&ble.connected?`<span class="dot ok"></span>Live · ${esc(ble.name)}`:ble?`<span class="dot err pulse"></span>${esc(ble.msg||'Bluetooth lost')}`:`<span class="dot"></span>${liveBpm?'Google Health (delayed '+Math.max(0,Math.round((Date.now()-liveAt)/60e3))+' min)':'Google Health sync'}`;
 }
 function endLiveConfirm(){
  const A=S.active; const st=liveStats(A,Date.now()); const m=(Date.now()-A.start)/60e3;
@@ -810,10 +820,19 @@ function endLiveConfirm(){
  });
  $('#sheet').style.zIndex=80;$('#scrim').style.zIndex=79;
 }
-function stopLive(){ clearInterval(liveTick);clearInterval(apiPoll);clearInterval(shiftTick); try{wakeLock&&wakeLock.release()}catch(e){} wakeLock=null;
- try{ble&&ble.dev.gatt.connected&&ble.dev.gatt.disconnect()}catch(e){} ble=null; liveBpm=null; $('#live').classList.remove('on','dim'); $('#sheet').style.zIndex='';$('#scrim').style.zIndex=''; }
+function mergeNative(){
+ if(!NATIVE||!S.active) return;
+ try{const A=S.active,last=A.samples.length?A.samples[A.samples.length-1][0]:0,arr=JSON.parse(NATIVE.samplesSince(last));
+  if(arr.length){A.samples.push(...arr);const l=arr[arr.length-1];liveBpm=l[1];liveAt=l[0];save()}}catch(e){}
+}
+window.onNativeHR=b=>onHR(b);
+window.onNativeStatus=(c,name,msg)=>{if(!NATIVE)return;ble=S.active?{connected:c,name:name||'Fitbit Air',msg:msg||''}:null;updateLive()};
+window.onNativeResume=()=>{if(S.active){mergeNative();updateLive()} if(!S.settings.demo&&S.settings.connected&&(!S.lastSync||Date.now()-S.lastSync>3*60e3))syncHealth()};
+window.onNativeBack=()=>{ if($('#sheet').classList.contains('on')){closeSheet();return true} if($('#live').classList.contains('on')){$('#live').classList.remove('on');render();return true} if(tab!=='today'){go('today');return true} return false };
+function stopLive(){ if(NATIVE){try{NATIVE.stopWorkout();NATIVE.keepScreenOn(false)}catch(e){}} clearInterval(liveTick);clearInterval(apiPoll);clearInterval(shiftTick); try{wakeLock&&wakeLock.release()}catch(e){} wakeLock=null;
+ try{ble&&ble.dev&&ble.dev.gatt.connected&&ble.dev.gatt.disconnect()}catch(e){} ble=null; liveBpm=null; $('#live').classList.remove('on','dim'); $('#sheet').style.zIndex='';$('#scrim').style.zIndex=''; }
 async function finishLive(sync){
- const A=S.active,end=Date.now(),st=liveStats(A,end),m=(end-A.start)/60e3;
+ mergeNative(); const A=S.active,end=Date.now(),st=liveStats(A,end),m=(end-A.start)/60e3;
  const ds=[];let lt=0;A.samples.forEach(x=>{if(x[0]-lt>=5000){ds.push(x);lt=x[0]}}); // keep a sample every 5 s
  const w={id:A.id,type:A.type,name:'',start:A.start,end,kcal:st.kcal||Math.round(m*7*latestWeightKg()/70),avgHR:st.avg,maxHR:st.max,zoneSecs:st.secs,hr:ds.length?ds:null,live:true};
  stopLive(); S.active=null; S.workouts.push(w); save(); closeSheet(); tab='workouts'; render(); toast('Workout saved');
