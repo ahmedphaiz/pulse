@@ -898,7 +898,7 @@ async function hrFor(id,t0,t1){
  const local=(H().hr||[]).filter(x=>x.t>=t0&&x.t<=t1);
  if(S.settings.demo||!S.settings.connected) return local;
  if(local.length>20&&local[0].t-t0<5*60e3) return local;
- if(!(await ensureToken())) return local;
+ if(!(await ensureToken())){ if(!local.length){const e=new Error('needauth');e.needAuth=true;throw e} return local }
  const a=new Date(t0).toISOString(),b=new Date(t1).toISOString();
  let pts; try{pts=await listAll('heart-rate',`heart_rate.sample_time.physical_time >= "${a}" AND heart_rate.sample_time.physical_time <= "${b}"`,20000)}
  catch(e){pts=await listAll('heart-rate',`heart_rate.sample_time.physical_time >= "${a}"`,20000)}
@@ -922,18 +922,20 @@ async function sheetWorkoutDetail(w){
   ${w.distanceKm?tile(w.distanceKm.toFixed(2)+'<small>km</small>','distance')+tile(`${Math.floor(pace)}:${pad(Math.round(pace%1*60))}`,'pace /km'):''}${w.steps?tile(fmtN(w.steps),'steps'):''}</div>`;
   if(loading) x+=`<div class="loading">Loading heart rate from Google Health…</div>`;
   else if(hs&&hs.n>1) x+=`<div class="sec" style="margin-top:4px">Heart rate <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:500">· drag to inspect</span></div>${hrChart(hs.pts,[],0,w.start,w.end,160,true)}<div class="sec">Time in zones</div>${zoneRows(hs.secs)}`;
+  else if(hs&&hs.needAuth) x+=`<div class="note">Your Google sign-in has expired, so heart rate can't load.</div><button class="btn primary block" id="wauth" style="margin-bottom:6px">Reconnect Google to load heart rate</button>`;
   else x+=`<div class="note">No heart-rate data for this workout${S.settings.demo?' in demo mode':S.settings.connected?'':' — connect Google Health to see it'}.</div>`;
   if(w.notes) x+=`<div class="sec">Notes</div><div class="small">${esc(w.notes)}</div>`;
   x+=`<div class="tiny muted" style="margin:14px 0 12px">${src}${w.synced?' · saved to Google Health':''}</div>
   <div class="row" style="gap:8px">${S.settings.apiKey?`<button class="btn ghost" style="flex:1" id="wask">${ico('coach')} Ask coach</button>`:''}${w.local?`<button class="btn danger" id="wdel">Delete</button>`:''}<button class="btn" style="flex:1" data-close>Close</button></div>`;
   openSheet(x,r=>{r.querySelector('[data-close]').onclick=closeSheet;
+   const au=r.querySelector('#wauth'); if(au) au.onclick=async()=>{try{if(await connectGoogle(false))sheetWorkoutDetail(w)}catch(e){toast(e.message)}};
    const d=r.querySelector('#wdel'); if(d) d.onclick=()=>{S.workouts=S.workouts.filter(o=>o.id!==w.id);save();closeSheet();render();toast('Removed from Pulse')};
    const a=r.querySelector('#wask'); if(a) a.onclick=()=>{closeSheet();go('coach');sendAsk(`Review my ${typeName(w.type)} on ${fmtD(w.start)} ${fmtT(w.start)}: ${dur(m)}, ${kcal} kcal${hs&&hs.avg?`, avg HR ${hs.avg}, max ${hs.max}, training load ${hs.load}, time in zones: ${ZONES.map((z,i)=>z.n+' '+Math.round(hs.secs[i]/60)+'min').join(', ')}`:''}. How did it go and what should I do next?`)};
   });
  };
  if(w.hr&&w.hr.length>1){const pts=w.hr.map(x=>({t:x[0],bpm:x[1]}));render_(hrStats(pts,w.start,w.end));return}
  render_(null,true);
- try{const pts=await hrFor(w.id,w.start,w.end);render_(pts.length?hrStats(pts,w.start,w.end):null)}catch(e){render_(null);toast('Heart rate: '+e.message)}
+ try{const pts=await hrFor(w.id,w.start,w.end);render_(pts.length?hrStats(pts,w.start,w.end):null)}catch(e){if(e.needAuth)render_({needAuth:true});else{render_(null);toast('Heart rate: '+e.message)}}
 }
 async function sheetDetected(t0,t1){
  const pts=(H().hr||[]); const hs=hrStats(pts,t0,t1),m=(t1-t0)/60e3;
