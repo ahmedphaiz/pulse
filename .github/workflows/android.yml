@@ -1,0 +1,50 @@
+name: Build Android app
+
+on:
+  push:
+    paths:
+      - 'android/**'
+      - '.github/workflows/android.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.14.3'
+
+      - name: Restore signing key from secrets
+        run: echo "${{ secrets.PULSE_KEYSTORE }}" | base64 -d > android/app/pulse.keystore
+
+      - name: Build APK
+        working-directory: android
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}
+          KEY_PASSWORD: ${{ secrets.PULSE_KEY_PASSWORD }}
+        run: gradle assembleRelease --no-daemon --stacktrace
+
+      - name: Rename APK
+        run: cp android/app/build/outputs/apk/release/app-release.apk pulse.apk
+
+      - name: Publish download
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: app-latest
+          name: Pulse Android app (build ${{ github.run_number }})
+          body: |
+            On your Pixel, open https://github.com/${{ github.repository }}/releases/latest/download/pulse.apk to download and install.
+          files: pulse.apk
+          make_latest: true
+          overwrite_files: true
